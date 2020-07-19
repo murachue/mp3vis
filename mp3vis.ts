@@ -187,7 +187,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     subblock_gain: subblock_gain_gr_ch,
                     region_address1: region_address1_gr_ch,
                     region_address2: region_address2_gr_ch,
-                });
+                } as const);
             } else {
                 // normal window
                 const table_select_gr_ch = [];
@@ -205,7 +205,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     subblock_gain: null,
                     region_address1: region_address1_gr_ch,
                     region_address2: region_address2_gr_ch,
-                });
+                } as const);
             }
             preflag_gr.push(await r.readbits(1));
             scalefac_scale_gr.push(await r.readbits(1));
@@ -301,7 +301,8 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     const scalefac_s = [];
     for (const gr of times(2)) {
         for (const ch of times(nchans)) {
-            ;
+            const block = frame.sideinfo.block[gr][ch];
+            // TODO
         }
     }
 
