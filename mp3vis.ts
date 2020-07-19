@@ -39,6 +39,19 @@ class U8BitReader {
         }
         return b;
     }
+    async readbytes(nbytes: number) {
+        if (this.atebits !== 8) {
+            throw new Error(`not byte boundary tell=${this.tell()}`);
+        }
+        const nrb = Math.min(this.u8.length - this.bypos - 1, nbytes);
+        const bys = this.u8.slice(this.bypos + 1, this.bypos + 1 + nrb);
+        this.bypos += nrb;
+        if (nrb < nbytes) {
+            // even if partial read succeeds.
+            throw new Error("!eof");
+        }
+        return bys;
+    }
     seek(bipos: number) {
         bipos = Math.min(bipos, this.u8.length * 8);
         this.bypos = Math.floor(bipos / 8);
@@ -104,7 +117,7 @@ async function readheader(r: U8BitReader) {
     };
 };
 
-async function readlayer3audioregionparams(r: U8BitReader) {
+async function readlayer3normalwin(r: U8BitReader) {
     const table_select = [];
     for (const region of times(3)) {
         table_select.push(await r.readbits(5));
@@ -116,12 +129,14 @@ async function readlayer3audioregionparams(r: U8BitReader) {
         table_select,
         region_address1,
         region_address2,
+
+        block_type: 0,
     };
 }
 
-async function readlayer3audioblockparams(r: U8BitReader) {
+async function readlayer3nonnormalwin(r: U8BitReader) {
     const block_type = await r.readbits(2);
-    const switch_point = await r.readbits(1);
+    const switch_point = await r.readbits(1); // mixed_block?
     const table_select = [];
     for (const region of times(2)) {
         table_select.push(await r.readbits(5));
@@ -131,21 +146,30 @@ async function readlayer3audioblockparams(r: U8BitReader) {
         subblock_gain.push(await r.readbits(3));
     }
 
+    if (block_type === 0) {
+        throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
+    }
+
+    const region_address1 = (block_type === 2 && switch_point === 0) ? 8 : 7; // from Lagerstrom MP3 Thesis
+
     return {
         block_type,
         switch_point,
         table_select,
         subblock_gain,
+
+        region_address1,
+        region_address2: 20 - region_address1, // from Lagerstrom MP3 Thesis
     };
 }
 
-async function readlayer3audioparams(r: U8BitReader) {
+async function readlayer3grparams(r: U8BitReader) {
     const part2_3_length = await r.readbits(12);
     const big_values = await r.readbits(9);
     const global_gain = await r.readbits(8);
     const scalefac_compress = await r.readbits(4);
-    const blocksplit_flag = await r.readbits(1);
-    const param2 = await (blocksplit_flag ? readlayer3audioblockparams(r) : readlayer3audioregionparams(r));
+    const blocksplit_flag = await r.readbits(1); // window_switch?
+    const param2 = await (blocksplit_flag ? readlayer3nonnormalwin(r) : readlayer3normalwin(r)); // both are 22bits
     const preflag = await r.readbits(1);
     const scalefac_scale = await r.readbits(1);
     const count1table_select = await r.readbits(1);
@@ -163,16 +187,15 @@ async function readlayer3audioparams(r: U8BitReader) {
     };
 }
 
-async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
-    if (header.mode === 3) {
-        throw new Error("single_channel not supported yet");
-    }
+async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
+    const is_mono = header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
 
-    const main_data_end = await r.readbits(9);
-    const private_bits = await r.readbits(3);
-    // const scfsi = times(2).map((ch) => times(4).map((scfsi_band) => await r.readbits(1)));
+    const main_data_end = await r.readbits(9); // means this frame needs this more bytes from previous last
+    const private_bits = await r.readbits(is_mono ? 5 : 3);
+    // const scfsi = times(nchans).map((ch) => times(4).map((scfsi_band) => await r.readbits(1)));
     const scfsi = [];
-    for (const ch of times(2)) {
+    for (const ch of times(nchans)) {
         const scfsi_ch = [];
         for (const band of times(4)) {
             scfsi_ch.push(await r.readbits(1));
@@ -181,7 +204,7 @@ async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<ty
     }
 
     // const params = times(2).map((gr) => {
-    //     times(2).map((ch) => {
+    //     times(nchans).map((ch) => {
     //         const part2_3_length = await r.readbits(12);
     //         const 
     //         return { }
@@ -190,8 +213,8 @@ async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<ty
     const params = [];
     for (const gr of times(2)) {
         const params_gr = [];
-        for (const ch of times(2)) {
-            params_gr.push(await readlayer3audioparams(r));
+        for (const ch of times(nchans)) {
+            params_gr.push(await readlayer3grparams(r));
         }
         params.push(params_gr);
     }
@@ -211,12 +234,23 @@ async function readframe(r: U8BitReader) {
     if (header.layer != 1) { // layer3
         throw new Error("!not-layer3");
     }
-    const audio_data = await readlayer3audio(r, header);
+    const sideinfo = await readlayer3sideinfo(r, header);
+    if (header.bitrate_index === 0) {
+        throw new Error("free-format not supported yet");
+    }
+    const headbytes = r.tell() / 8 - offset;
+    const l3bitratekbps = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320][header.bitrate_index - 1];
+    const sampfreq = [44100, 48000, 32000][header.sampling_frequency];
+    // TODO: how to measure framebytes in free-format? try to read next sync and then read?? difficult on buffering...
+    // const framebytes = sampfreq/1152/* 2granules */;
+    const framebytes = Math.floor(144 * l3bitratekbps * 1000 / sampfreq) + header.padding_bit; // from Lagerstrom MP3 Thesis, but what is 144?
+    const data = await r.readbytes(framebytes - headbytes);
     return {
         offset,
         header,
         crc_check,
-        audio_data,
+        sideinfo,
+        data, // not main_data that is reassembled.
     };
 };
 
