@@ -20,5 +20,6 @@ module.exports = {
     output: {
         filename: "mp3vis.js",
         path: __dirname,
+        // libraryTarget: "umd",
     },
 };

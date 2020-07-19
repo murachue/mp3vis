@@ -142,6 +142,8 @@ async function parsefile(ab: ArrayBuffer) {
     console.log(frames);
 };
 
+
+// TODO move to html, to do that we must find export parsefile() by webpack to be able to dynamic import().parsefile
 const it = document.getElementById("dropbox")!;
 it.addEventListener("dragover", (e) => {
     e.preventDefault();
