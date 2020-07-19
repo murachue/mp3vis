@@ -117,113 +117,123 @@ async function readheader(r: U8BitReader) {
     };
 };
 
-async function readlayer3normalwin(r: U8BitReader) {
-    const table_select = [];
-    for (const region of times(3)) {
-        table_select.push(await r.readbits(5));
-    }
-    const region_address1 = await r.readbits(4);
-    const region_address2 = await r.readbits(3);
-
-    return {
-        table_select,
-        region_address1,
-        region_address2,
-
-        block_type: 0,
-    };
-}
-
-async function readlayer3nonnormalwin(r: U8BitReader) {
-    const block_type = await r.readbits(2);
-    const switch_point = await r.readbits(1); // mixed_block?
-    const table_select = [];
-    for (const region of times(2)) {
-        table_select.push(await r.readbits(5));
-    }
-    const subblock_gain = [];
-    for (const window of times(3)) {
-        subblock_gain.push(await r.readbits(3));
-    }
-
-    if (block_type === 0) {
-        throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
-    }
-
-    const region_address1 = (block_type === 2 && switch_point === 0) ? 8 : 7; // from Lagerstrom MP3 Thesis
-
-    return {
-        block_type,
-        switch_point,
-        table_select,
-        subblock_gain,
-
-        region_address1,
-        region_address2: 20 - region_address1, // from Lagerstrom MP3 Thesis
-    };
-}
-
-async function readlayer3grparams(r: U8BitReader) {
-    const part2_3_length = await r.readbits(12);
-    const big_values = await r.readbits(9);
-    const global_gain = await r.readbits(8);
-    const scalefac_compress = await r.readbits(4);
-    const blocksplit_flag = await r.readbits(1); // window_switch?
-    const param2 = await (blocksplit_flag ? readlayer3nonnormalwin(r) : readlayer3normalwin(r)); // both are 22bits
-    const preflag = await r.readbits(1);
-    const scalefac_scale = await r.readbits(1);
-    const count1table_select = await r.readbits(1);
-
-    return {
-        ...param2,
-        part2_3_length,
-        big_values,
-        global_gain,
-        scalefac_compress,
-        blocksplit_flag,
-        preflag,
-        scalefac_scale,
-        count1table_select,
-    };
-}
-
 async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
     const is_mono = header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
     const main_data_end = await r.readbits(9); // means this frame needs this more bytes from previous last
     const private_bits = await r.readbits(is_mono ? 5 : 3);
-    // const scfsi = times(nchans).map((ch) => times(4).map((scfsi_band) => await r.readbits(1)));
+    // note: scfsi just for long windows.
     const scfsi = [];
     for (const ch of times(nchans)) {
         const scfsi_ch = [];
-        for (const band of times(4)) {
+        for (const band of times(4)) { // for bands 0..5, 6..10, 11..15, 16..20 (note: only first is 6 elms not 5!)
             scfsi_ch.push(await r.readbits(1));
         }
         scfsi.push(scfsi_ch);
     }
 
-    // const params = times(2).map((gr) => {
-    //     times(nchans).map((ch) => {
-    //         const part2_3_length = await r.readbits(12);
-    //         const 
-    //         return { }
-    //     });
-    // });
-    const params = [];
+    const part2_3_length = [];
+    const big_values = [];
+    const global_gain = [];
+    const scalefac_compress = [];
+    const block = [];
+    const preflag = [];
+    const scalefac_scale = [];
+    const count1table_select = [];
+
     for (const gr of times(2)) {
-        const params_gr = [];
+        const part2_3_length_gr = [];
+        const big_values_gr = [];
+        const global_gain_gr = [];
+        const scalefac_compress_gr = [];
+        const block_gr = [];
+        const preflag_gr = [];
+        const scalefac_scale_gr = [];
+        const count1table_select_gr = [];
         for (const ch of times(nchans)) {
-            params_gr.push(await readlayer3grparams(r));
+            part2_3_length_gr.push(await r.readbits(12));
+            big_values_gr.push(await r.readbits(9));
+            global_gain_gr.push(await r.readbits(8));
+            scalefac_compress_gr.push(await r.readbits(4));
+            const blocksplit_flag_gr_ch = await r.readbits(1);
+            // both are 22bits
+            if (blocksplit_flag_gr_ch) {
+                // non-normal window
+                const block_type_gr_ch = await r.readbits(2);
+                const switch_point_gr_ch = await r.readbits(1);
+                const table_select_gr_ch = [];
+                for (const region of times(2)) {
+                    table_select_gr_ch.push(await r.readbits(5));
+                }
+                const subblock_gain_gr_ch = [];
+                for (const window of times(3)) {
+                    subblock_gain_gr_ch.push(await r.readbits(3));
+                }
+
+                if (block_type_gr_ch === 0) {
+                    throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
+                }
+
+                // they from Lagerstrom MP3 Thesis
+                const region_address1_gr_ch = (block_type_gr_ch === 2 && switch_point_gr_ch === 0) ? 8 : 7;
+                const region_address2_gr_ch = 20 - region_address1_gr_ch;
+
+                block_gr.push({
+                    block_split_flag: true, // window_switch?
+                    block_type: block_type_gr_ch,
+                    switch_point: switch_point_gr_ch, // mixed_block?
+                    table_select: table_select_gr_ch,
+                    subblock_gain: subblock_gain_gr_ch,
+                    region_address1: region_address1_gr_ch,
+                    region_address2: region_address2_gr_ch,
+                });
+            } else {
+                // normal window
+                const table_select_gr_ch = [];
+                for (const region of times(3)) {
+                    table_select_gr_ch.push(await r.readbits(5));
+                }
+                const region_address1_gr_ch = await r.readbits(4);
+                const region_address2_gr_ch = await r.readbits(3);
+
+                block_gr.push({
+                    block_split_flag: false, // window_switch?
+                    block_type: 0,
+                    switch_point: null, // mixed_block?
+                    table_select: table_select_gr_ch,
+                    subblock_gain: null,
+                    region_address1: region_address1_gr_ch,
+                    region_address2: region_address2_gr_ch,
+                });
+            }
+            preflag_gr.push(await r.readbits(1));
+            scalefac_scale_gr.push(await r.readbits(1));
+            count1table_select_gr.push(await r.readbits(1));
         }
-        params.push(params_gr);
+
+        part2_3_length.push(part2_3_length_gr);
+        big_values.push(big_values_gr);
+        global_gain.push(global_gain_gr);
+        scalefac_compress.push(scalefac_compress_gr);
+        block.push(block_gr);
+        preflag.push(preflag_gr);
+        scalefac_scale.push(scalefac_scale_gr);
+        count1table_select.push(count1table_select_gr);
     }
 
     return {
         main_data_end,
         private_bits,
-        scfsi,
-        params,
+        scfsi, // SCaleFactor Selection Information
+        part2_3_length,
+        big_values,
+        global_gain,
+        scalefac_compress,
+        block,
+        preflag,
+        scalefac_scale,
+        count1table_select,
     };
 };
 
@@ -235,6 +245,8 @@ async function readframe(r: U8BitReader) {
         throw new Error("!not-layer3");
     }
     const sideinfo = await readlayer3sideinfo(r, header);
+    // note: it seems here becomes byte-boundary. spec carefully made? (using private_bits as padding)
+
     if (header.bitrate_index === 0) {
         throw new Error("free-format not supported yet");
     }
@@ -254,19 +266,69 @@ async function readframe(r: U8BitReader) {
     };
 };
 
+// https://stackoverflow.com/a/35633935
+function concat<T extends Uint8Array>(a: T, b: T) {
+    const x = new (a.constructor as any)(a.length + b.length);
+    x.set(a);
+    x.set(b, a.length);
+    return x;
+}
+
+// note: this will return more than enough on tail.
+function get_main_data(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
+    // ugly but can't flatMap to Uint8Array...
+    const reservoir = prevframes.map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
+    if (reservoir.length < frame.sideinfo.main_data_end) {
+        // not enough reservoir (started in middle of stream?), can't decode
+        return null;
+    }
+
+    return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
+}
+
+async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
+    const main_data = get_main_data(prevframes, frame);
+    if (!main_data) {
+        // not enough reservoir (started in middle of stream?), can't decode
+        return null;
+    }
+
+    // if we readed frame.data this can be non-async.
+    const r = new U8BitReader(main_data);
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+    const scalefac_l = [];
+    const scalefac_s = [];
+    for (const gr of times(2)) {
+        for (const ch of times(nchans)) {
+            ;
+        }
+    }
+
+    return {
+        main_data,
+    };
+}
+
 async function parsefile(ab: ArrayBuffer) {
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
+    const maindatas = [];
     while (!br.eof()) {
         const pos = br.tell();
         try {
             frames.push(await readframe(br));
+            const framedata = await decodeframe(frames.slice(-3, -1), frames[frames.length - 1]); // recent 3 frames including current.
+            if (framedata) {
+                maindatas.push(framedata);
+            }
         } catch {
             // try next byte, synchronizing to byte
             br.seek(Math.floor(pos / 8 + 1) * 8);
         }
     }
     console.log(frames);
+    console.log(maindatas);
 };
 
 
