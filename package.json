@@ -1,0 +1,18 @@
+{
+  "name": "mp3vis",
+  "version": "0.0.1",
+  "description": "mp3 visualizer",
+  "main": "mp3vis.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "eslint": "^7.5.0",
+    "prettier": "^2.0.5",
+    "typescript": "^3.9.7",
+    "typescript-eslint": "0.0.1-alpha.0"
+  }
+}

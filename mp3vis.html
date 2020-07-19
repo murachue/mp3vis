@@ -1,0 +1,38 @@
+<html>
+<head>
+<title>mp3vis</title>
+<style>
+* {
+	margin: 0px;
+	padding: 0px;
+}
+body {
+	background: #111;
+	color: #ddd;
+}
+</style>
+</head>
+<body>
+<p>hello
+<div id="dropbox" style="background: #ccc">drag here</div>
+<script src="mp3vis.js"></script>
+<script>
+const it = document.getElementById("dropbox");
+it.addEventListener("dragover", (e)=>{
+	e.preventDefault();
+});
+it.addEventListener("drop", (e)=>{
+	e.preventDefault();
+	const file = e.dataTransfer?.files?.[0];
+	if(file) {
+		file.arrayBuffer().then(parsefile)
+	}
+});
+fetch("Little.mp3").then((r)=>{
+	if(r.ok){
+		r.arrayBuffer().then(parsefile);
+	}
+});
+</script>
+</body>
+</html>
