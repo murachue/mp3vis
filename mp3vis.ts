@@ -1,16 +1,30 @@
+// https://log.pocka.io/posts/typescript-promisetype/
+type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
+    ? P
+    : never
+
 // bslbf/uimsbf reader
 class U8BitReader {
-    constructor(u8) {
+    u8: Uint8Array;
+    atebits: number;
+    bits: number;
+    bypos: number;
+
+    constructor(u8: Uint8Array) {
         this.u8 = u8;
-        this.seek(0);
+        // tsc does not recognize if using #seek. or calling method in ctor is invalid?
+        // this.seek(0);
+        this.bypos = -1;
+        this.atebits = 8;
+        this.bits = 0;
     }
-    async readbits(nbits) {
+    async readbits(nbits: number) {
         let b = 0;
         while (0 < nbits) {
             if (8 <= this.atebits) {
                 if (this.eof()) {
-                    // return null even if partial read succeeds.
-                    return null;
+                    // even if partial read succeeds.
+                    throw new Error("!eof");
                 }
                 this.bypos += 1;
                 this.bits = this.u8[this.bypos];
@@ -23,7 +37,7 @@ class U8BitReader {
         }
         return b;
     }
-    seek(bipos) {
+    seek(bipos: number) {
         bipos = Math.min(bipos, this.u8.length * 8);
         this.bypos = Math.floor(bipos / 8);
         this.atebits = bipos % 8;
@@ -40,32 +54,33 @@ class U8BitReader {
         return this.u8.length <= this.bypos + 1;
     }
 }
-const readheader = async (ab) => {
-    const syncword = await ab.readbits(12)
+
+async function readheader(r: U8BitReader) {
+    const syncword = await r.readbits(12)
     if (syncword !== 0xFFF) {
         throw new Error("!sync");
     }
-    const id = await ab.readbits(1); // 1==MPEG_Audio
+    const id = await r.readbits(1); // 1==MPEG_Audio
     if (id === 0) {
         throw new Error("!id");
     }
-    const layer = await ab.readbits(2); // 11=layer1 10=layer2 01=layer3
+    const layer = await r.readbits(2); // 11=layer1 10=layer2 01=layer3
     if (layer === 0) {
         throw new Error("!layer");
     }
-    const protection_bit = await ab.readbits(1); // 0=redundancy_added
-    const bitrate_index = await ab.readbits(4);
-    const sampling_frequency = await ab.readbits(2); // 00=44.1k 01=48k 10=32k
+    const protection_bit = await r.readbits(1); // 0=redundancy_added
+    const bitrate_index = await r.readbits(4);
+    const sampling_frequency = await r.readbits(2); // 00=44.1k 01=48k 10=32k
     if (sampling_frequency === 3) {
         throw new Error("!sampfreq");
     }
-    const padding_bit = await ab.readbits(1); // 1=padding_added
-    const private_bit = await ab.readbits(1);
-    const mode = await ab.readbits(2); // 00=stereo 01=joint_stereo(MS/IS) 10=dual_channel 11=single_channel
-    const mode_extension = await ab.readbits(2); // Layer3: (msb)MSon|ISon(lsb)
-    const copyright = await ab.readbits(1); // 1=copyright_protected
-    const original = await ab.readbits(1); // 1=original
-    const emphasis = await ab.readbits(2); // 00=noemph 01=50/15us 10=reserved 11=CCITT_J.17
+    const padding_bit = await r.readbits(1); // 1=padding_added
+    const private_bit = await r.readbits(1);
+    const mode = await r.readbits(2); // 00=stereo 01=joint_stereo(MS/IS) 10=dual_channel 11=single_channel
+    const mode_extension = await r.readbits(2); // Layer3: (msb)MSon|ISon(lsb)
+    const copyright = await r.readbits(1); // 1=copyright_protected
+    const original = await r.readbits(1); // 1=original
+    const emphasis = await r.readbits(2); // 00=noemph 01=50/15us 10=reserved 11=CCITT_J.17
     if (emphasis === 2) {
         throw new Error("!emph");
     }
@@ -86,17 +101,19 @@ const readheader = async (ab) => {
         emphasis,
     };
 };
-const readlayer3audio = async (ab, header) => {
+
+async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
 
 };
-const readframe = async (ab) => {
-    const offset = ab.tell() / 8;
-    const header = await readheader(ab);
-    const crc_check = (header.protection_bit === 0) ? await ab.readbits(16) : null;
+
+async function readframe(r: U8BitReader) {
+    const offset = r.tell() / 8;
+    const header = await readheader(r);
+    const crc_check = (header.protection_bit === 0) ? await r.readbits(16) : null;
     if (header.layer != 1) { // layer3
         throw new Error("!not-layer3");
     }
-    const audio_data = await readlayer3audio(ab, header);
+    const audio_data = await readlayer3audio(r, header);
     return {
         offset,
         header,
@@ -104,7 +121,8 @@ const readframe = async (ab) => {
         audio_data,
     };
 };
-const parsefile = async (ab) => {
+
+async function parsefile(ab: ArrayBuffer) {
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
     while (!br.eof()) {
