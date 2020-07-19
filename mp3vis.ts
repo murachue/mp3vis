@@ -1,3 +1,5 @@
+import { times } from "lodash-es";
+
 // https://log.pocka.io/posts/typescript-promisetype/
 type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
     ? P
@@ -103,7 +105,10 @@ async function readheader(r: U8BitReader) {
 };
 
 async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
-
+    // mode != single
+    const main_data_end = await r.readbits(9);
+    const private_bits = await r.readbits(3);
+    const scfsi = times(2).map(() => times(4).map(() => r.readbits(1)));
 };
 
 async function readframe(r: U8BitReader) {
@@ -136,3 +141,20 @@ async function parsefile(ab: ArrayBuffer) {
     }
     console.log(frames);
 };
+
+const it = document.getElementById("dropbox")!;
+it.addEventListener("dragover", (e) => {
+    e.preventDefault();
+});
+it.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+        file.arrayBuffer().then(parsefile)
+    }
+});
+fetch("Little.mp3").then((r) => {
+    if (r.ok) {
+        r.arrayBuffer().then(parsefile);
+    }
+});
