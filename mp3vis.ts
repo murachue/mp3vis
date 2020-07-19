@@ -3,7 +3,7 @@ import { times } from "lodash-es";
 // https://log.pocka.io/posts/typescript-promisetype/
 type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
     ? P
-    : never
+    : never;
 
 // bslbf/uimsbf reader
 class U8BitReader {
@@ -58,7 +58,7 @@ class U8BitReader {
 }
 
 async function readheader(r: U8BitReader) {
-    const syncword = await r.readbits(12)
+    const syncword = await r.readbits(12);
     if (syncword !== 0xFFF) {
         throw new Error("!sync");
     }
@@ -104,11 +104,104 @@ async function readheader(r: U8BitReader) {
     };
 };
 
+async function readlayer3audioregionparams(r: U8BitReader) {
+    const table_select = [];
+    for (const region of times(3)) {
+        table_select.push(await r.readbits(5));
+    }
+    const region_address1 = await r.readbits(4);
+    const region_address2 = await r.readbits(3);
+
+    return {
+        table_select,
+        region_address1,
+        region_address2,
+    };
+}
+
+async function readlayer3audioblockparams(r: U8BitReader) {
+    const block_type = await r.readbits(2);
+    const switch_point = await r.readbits(1);
+    const table_select = [];
+    for (const region of times(2)) {
+        table_select.push(await r.readbits(5));
+    }
+    const subblock_gain = [];
+    for (const window of times(3)) {
+        subblock_gain.push(await r.readbits(3));
+    }
+
+    return {
+        block_type,
+        switch_point,
+        table_select,
+        subblock_gain,
+    };
+}
+
+async function readlayer3audioparams(r: U8BitReader) {
+    const part2_3_length = await r.readbits(12);
+    const big_values = await r.readbits(9);
+    const global_gain = await r.readbits(8);
+    const scalefac_compress = await r.readbits(4);
+    const blocksplit_flag = await r.readbits(1);
+    const param2 = await (blocksplit_flag ? readlayer3audioblockparams(r) : readlayer3audioregionparams(r));
+    const preflag = await r.readbits(1);
+    const scalefac_scale = await r.readbits(1);
+    const count1table_select = await r.readbits(1);
+
+    return {
+        ...param2,
+        part2_3_length,
+        big_values,
+        global_gain,
+        scalefac_compress,
+        blocksplit_flag,
+        preflag,
+        scalefac_scale,
+        count1table_select,
+    };
+}
+
 async function readlayer3audio(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
-    // mode != single
+    if (header.mode === 3) {
+        throw new Error("single_channel not supported yet");
+    }
+
     const main_data_end = await r.readbits(9);
     const private_bits = await r.readbits(3);
-    const scfsi = times(2).map(() => times(4).map(() => r.readbits(1)));
+    // const scfsi = times(2).map((ch) => times(4).map((scfsi_band) => await r.readbits(1)));
+    const scfsi = [];
+    for (const ch of times(2)) {
+        const scfsi_ch = [];
+        for (const band of times(4)) {
+            scfsi_ch.push(await r.readbits(1));
+        }
+        scfsi.push(scfsi_ch);
+    }
+
+    // const params = times(2).map((gr) => {
+    //     times(2).map((ch) => {
+    //         const part2_3_length = await r.readbits(12);
+    //         const 
+    //         return { }
+    //     });
+    // });
+    const params = [];
+    for (const gr of times(2)) {
+        const params_gr = [];
+        for (const ch of times(2)) {
+            params_gr.push(await readlayer3audioparams(r));
+        }
+        params.push(params_gr);
+    }
+
+    return {
+        main_data_end,
+        private_bits,
+        scfsi,
+        params,
+    };
 };
 
 async function readframe(r: U8BitReader) {
@@ -135,8 +228,8 @@ async function parsefile(ab: ArrayBuffer) {
         try {
             frames.push(await readframe(br));
         } catch {
-            // try next byte
-            br.seek(pos + 8);
+            // try next byte, synchronizing to byte
+            br.seek(Math.floor(pos / 8 + 1) * 8);
         }
     }
     console.log(frames);
@@ -152,10 +245,10 @@ it.addEventListener("drop", (e) => {
     e.preventDefault();
     const file = e.dataTransfer?.files?.[0];
     if (file) {
-        file.arrayBuffer().then(parsefile)
+        file.arrayBuffer().then(parsefile);
     }
 });
-fetch("Little.mp3").then((r) => {
+fetch("ah.mp3").then((r) => {
     if (r.ok) {
         r.arrayBuffer().then(parsefile);
     }

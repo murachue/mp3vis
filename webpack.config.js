@@ -17,6 +17,7 @@ module.exports = {
     // optimization: {
     //     usedExports: true,
     // },
+    devtool: "inline-source-map",
     output: {
         filename: "mp3vis.js",
         path: __dirname,
