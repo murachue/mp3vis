@@ -22,5 +22,7 @@ module.exports = {
         filename: "mp3vis.js",
         path: __dirname,
         // libraryTarget: "umd",
+        libraryTarget: "window",
+        library: "Mp3vis",
     },
 };

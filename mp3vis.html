@@ -19,6 +19,24 @@
 	<p>hello
 	<div id="dropbox" style="background: #ccc">drag here</div>
 	<script src="mp3vis.js"></script>
+	<script>
+		const it = document.getElementById("dropbox");
+		it.addEventListener("dragover", (e) => {
+			e.preventDefault();
+		});
+		it.addEventListener("drop", (e) => {
+			e.preventDefault();
+			const file = e.dataTransfer?.files?.[0];
+			if (file) {
+				file.arrayBuffer().then(Mp3vis.parsefile);
+			}
+		});
+		fetch("ah.mp3").then((r) => {
+			if (r.ok) {
+				r.arrayBuffer().then(Mp3vis.parsefile);
+			}
+		});
+	</script>
 </body>
 
 </html>

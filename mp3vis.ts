@@ -1,4 +1,4 @@
-import { times } from "lodash-es";
+import { times, range } from "lodash-es";
 
 // https://log.pocka.io/posts/typescript-promisetype/
 type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
@@ -175,6 +175,11 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
                 }
 
+                if (switch_point_gr_ch === 1 && block_type_gr_ch !== 2) {
+                    // it seems...
+                    throw new Error(`!ReadTheF*ckingSpec: switch_point become 1 only if block_type is 2 but ${block_type_gr_ch}`);
+                }
+
                 // they from Lagerstrom MP3 Thesis
                 const region_address1_gr_ch = (block_type_gr_ch === 2 && switch_point_gr_ch === 0) ? 8 : 7;
                 const region_address2_gr_ch = 20 - region_address1_gr_ch;
@@ -223,10 +228,15 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
     }
 
     return {
-        main_data_end,
+        // per frame
+        main_data_end, // in "bytes"
         private_bits,
+
+        // per [ch]
         scfsi, // SCaleFactor Selection Information
-        part2_3_length,
+
+        // per [gr][ch]
+        part2_3_length, // in "bits"
         big_values,
         global_gain,
         scalefac_compress,
@@ -286,6 +296,13 @@ function get_main_data(prevframes: PromiseType<ReturnType<typeof readframe>>[], 
     return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
 }
 
+async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof readframe>>, part3_length: number) {
+
+}
+
+// ISO 11172-3 2.4.2.7 scalefac_compress
+const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
+
 async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
     const main_data = get_main_data(prevframes, frame);
     if (!main_data) {
@@ -297,21 +314,103 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     const r = new U8BitReader(main_data);
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
-    const scalefac_l = [];
-    const scalefac_s = [];
+    const scalefac: ({ type: "switch", scalefac_l: number[], scalefac_s_w: number[][]; } | { type: "short", scalefac_s: number[]; } | { type: "long", scalefac_l: number[]; })[][] = [];
     for (const gr of times(2)) {
+        const scalefac_gr = [];
         for (const ch of times(nchans)) {
-            const block = frame.sideinfo.block[gr][ch];
-            // TODO
+            const block_gr_ch = frame.sideinfo.block[gr][ch];
+            const scalefac_compress_gr_ch = frame.sideinfo.scalefac_compress[gr][ch];
+
+            const part2_start = r.tell();
+
+            // scale-factors are "part 2"
+            const [slen1, slen2] = scalefac_compress_tab[scalefac_compress_gr_ch];
+            if (block_gr_ch.block_type === 2) {
+                // short-window
+                if (block_gr_ch.switch_point) {
+                    // long-and-short
+                    const scalefac_l = [];
+                    for (const band of range(0, 7 + 1)) {
+                        scalefac_l[band] = await r.readbits(slen1);
+                    }
+                    const scalefac_s_w = [];
+                    for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) { // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s
+                        for (const band of range(sfrbeg, sfrend + 1)) {
+                            const scalefac_s_w_band = [];
+                            for (const window of times(3)) {
+                                scalefac_s_w_band[window] = await r.readbits(slen);
+                            }
+                            scalefac_s_w[band] = scalefac_s_w_band;
+                        }
+                    }
+                    scalefac_gr.push({
+                        type: "switch",
+                        scalefac_l,
+                        scalefac_s_w,
+                    } as const);
+                } else {
+                    // short
+                    const scalefac_s = [];
+                    for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
+                        for (const band of range(sfrbeg, sfrend + 1)) {
+                            scalefac_s[band] = await r.readbits(slen);
+                        }
+                    }
+                    scalefac_gr.push({
+                        type: "short",
+                        scalefac_s,
+                    } as const);
+                }
+            } else {
+                // long-window
+                // slen1 for 0..10, slen2 for 11..20
+                // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
+                const scalefac_l: number[] = [];
+                await [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]].reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
+                    await prev;
+                    for (const band of range(sfrbeg, sfrend + 1)) {
+                        if (gr === 0 || !frame.sideinfo.scfsi[ch][group]) {
+                            scalefac_l[band] = await r.readbits(slen);
+                        } else {
+                            // copy from granule 0 if gr===1 && scfsi===1
+                            if (block_gr_ch.block_type === 2) {
+                                throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
+                            }
+                            const scalefac_gr0 = scalefac[0][ch];
+                            // const scalefac_l_gr0 = (scalefac_gr0 as { scalefac_l: number[]; }).scalefac_l;
+                            if (scalefac_gr0.type !== "long") {
+                                throw new Error(`BadImpl: window mutated between granule: ${scalefac_gr0}`);
+                            }
+                            const scalefac_l_gr0 = scalefac_gr0.scalefac_l;
+                            scalefac_l[band] = scalefac_l_gr0[band];
+                        }
+                    }
+                }, Promise.resolve());
+                scalefac_gr.push({
+                    type: "long",
+                    scalefac_l,
+                } as const);
+            }
+
+            const part2_length = r.tell() - part2_start;
+
+            // read huffman "part 3"
+            const part3_length = frame.sideinfo.part2_3_length[gr][ch] - part2_length;
+            const samples = await readhuffman(r, frame, part3_length);
         }
+        scalefac.push(scalefac_gr);
     }
 
     return {
         main_data,
+
+        scalefac,
+        //huffman
+        //ancillary_bits
     };
 }
 
-async function parsefile(ab: ArrayBuffer) {
+export async function parsefile(ab: ArrayBuffer) {
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
     const maindatas = [];
@@ -331,22 +430,3 @@ async function parsefile(ab: ArrayBuffer) {
     console.log(frames);
     console.log(maindatas);
 };
-
-
-// TODO move to html, to do that we must find export parsefile() by webpack to be able to dynamic import().parsefile
-const it = document.getElementById("dropbox")!;
-it.addEventListener("dragover", (e) => {
-    e.preventDefault();
-});
-it.addEventListener("drop", (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer?.files?.[0];
-    if (file) {
-        file.arrayBuffer().then(parsefile);
-    }
-});
-fetch("ah.mp3").then((r) => {
-    if (r.ok) {
-        r.arrayBuffer().then(parsefile);
-    }
-});
