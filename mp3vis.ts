@@ -430,14 +430,15 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     // mp3decoder(haskell) completely ignores block_split_flag.
     const is_shortblock = (frame.sideinfo.block[gr][ch].block_type == 2 && frame.sideinfo.block[gr][ch].block_split_flag);
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
+    const bigvalues = frame.sideinfo.big_values[gr][ch] * 2;
     const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + 1];
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const region2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + frame.sideinfo.block[gr][ch].region_address2 + 2];
+    const region2start = is_shortblock ? Math.min(576, bigvalues) : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + frame.sideinfo.block[gr][ch].region_address2 + 2];
 
     const regionlens = [
         region1start,
         region2start - region1start,
-        frame.sideinfo.big_values[gr][ch] * 2 - region2start,
+        bigvalues - region2start,
     ];
 
     if (regionlens[2] < 0) {
