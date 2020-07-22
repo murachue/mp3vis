@@ -68,6 +68,9 @@ class U8BitReader {
     eof() {
         return this.u8.length <= this.bypos + 1;
     }
+    get length() {
+        return this.u8.length * 8;
+    }
 }
 
 async function readheader(r: U8BitReader) {
@@ -185,7 +188,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                 const region_address2_gr_ch = 20 - region_address1_gr_ch;
 
                 block_gr.push({
-                    block_split_flag: true, // window_switch?
+                    block_split_flag: true, // window_switch(ing)?
                     block_type: block_type_gr_ch,
                     switch_point: switch_point_gr_ch, // mixed_block?
                     table_select: table_select_gr_ch,
@@ -296,8 +299,38 @@ function get_main_data(prevframes: PromiseType<ReturnType<typeof readframe>>[], 
     return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
 }
 
-async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof readframe>>, part3_length: number) {
+const scalefactor_band_indices = {
+    44100: {
+        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
+        short: [0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192],
+    },
+    48000: {
+        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576],
+        short: [0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192],
+    },
+    32000: {
+        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576],
+        short: [0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192],
+    },
+} as const;
 
+// from Lagerstrom MP3 Thesis 2.4.3:
+//     |------part3_length(huffman bits)------|       |
+//     |---------big_value*2---------|        |       |
+// [1] | region0 | region1 | region2 | count1 | rzero | [576]
+async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof readframe>>, part3_length: number, gr: number, ch: number) {
+    if (part3_length <= 0) {
+        return Array(576).fill(0);
+    }
+
+    // not "blocktype==2 and switch_point==true"? really block_split_flag?? its always true if blocktype==2!
+    // IIS and Lagerstrom uses block_split_flag.
+    // mp3decoder(haskell) completely ignores block_split_flag.
+    const is_shortblock = (frame.sideinfo.block[gr][ch].block_type == 2 && frame.sideinfo.block[gr][ch].block_split_flag);
+    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
+    const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + 1];
+    // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
+    const region2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + frame.sideinfo.block[gr][ch].region_address2 + 2];
 }
 
 // ISO 11172-3 2.4.2.7 scalefac_compress
@@ -315,8 +348,10 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
     const scalefac: ({ type: "switch", scalefac_l: number[], scalefac_s_w: number[][]; } | { type: "short", scalefac_s: number[]; } | { type: "long", scalefac_l: number[]; })[][] = [];
+    const samples = [];
     for (const gr of times(2)) {
         const scalefac_gr = [];
+        const samples_gr = [];
         for (const ch of times(nchans)) {
             const block_gr_ch = frame.sideinfo.block[gr][ch];
             const scalefac_compress_gr_ch = frame.sideinfo.scalefac_compress[gr][ch];
@@ -396,17 +431,25 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
 
             // read huffman "part 3"
             const part3_length = frame.sideinfo.part2_3_length[gr][ch] - part2_length;
-            const samples = await readhuffman(r, frame, part3_length);
+            samples_gr.push(await readhuffman(r, frame, part3_length, gr, ch));
         }
         scalefac.push(scalefac_gr);
+        samples.push(samples_gr);
     }
+
+    const ancillary_nbits = (8 - r.tell() % 8) % 8;
+    const ancillary_bits = await r.readbits(ancillary_nbits);
+    const ancillary_bytes = await r.readbytes((r.length - r.tell()) / 8);
 
     return {
         main_data,
 
         scalefac,
-        //huffman
-        //ancillary_bits
+        samples,
+
+        ancillary_nbits,
+        ancillary_bits,
+        ancillary_bytes, // some of this are next or next-next frame's main_data.
     };
 }
 
