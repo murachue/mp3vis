@@ -136,117 +136,110 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
         scfsi.push(scfsi_ch);
     }
 
-    const part2_3_length = [];
-    const big_values = [];
-    const global_gain = [];
-    const scalefac_compress = [];
-    const block = [];
-    const preflag = [];
-    const scalefac_scale = [];
-    const count1table_select = [];
-
+    const granule_tmp = [];
     for (const gr of times(2)) {
-        const part2_3_length_gr = [];
-        const big_values_gr = [];
-        const global_gain_gr = [];
-        const scalefac_compress_gr = [];
-        const block_gr = [];
-        const preflag_gr = [];
-        const scalefac_scale_gr = [];
-        const count1table_select_gr = [];
+        const channel = [];
         for (const ch of times(nchans)) {
-            part2_3_length_gr.push(await r.readbits(12));
-            big_values_gr.push(await r.readbits(9));
-            global_gain_gr.push(await r.readbits(8));
-            scalefac_compress_gr.push(await r.readbits(4));
-            const blocksplit_flag_gr_ch = await r.readbits(1);
-            // both are 22bits
-            if (blocksplit_flag_gr_ch) {
-                // non-normal window
-                const block_type_gr_ch = await r.readbits(2);
-                const switch_point_gr_ch = await r.readbits(1);
-                const table_select_gr_ch = [];
-                for (const region of times(2)) {
-                    table_select_gr_ch.push(await r.readbits(5));
-                }
-                const subblock_gain_gr_ch = [];
-                for (const window of times(3)) {
-                    subblock_gain_gr_ch.push(await r.readbits(3));
-                }
+            const part2_3_length = await r.readbits(12);
+            const big_values = await r.readbits(9);
+            const global_gain = await r.readbits(8);
+            const scalefac_compress = await r.readbits(4);
+            const blocksplit_flag = await r.readbits(1);
+            const blockpart = await (async () => {
+                // both are 22bits
+                if (blocksplit_flag) {
+                    // non-normal window
+                    const block_type = await r.readbits(2);
+                    const switch_point = await r.readbits(1);
+                    const table_select = [];
+                    for (const region of times(2)) {
+                        table_select.push(await r.readbits(5));
+                    }
+                    const subblock_gain = [];
+                    for (const window of times(3)) {
+                        subblock_gain.push(await r.readbits(3));
+                    }
 
-                if (block_type_gr_ch === 0) {
-                    throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
+                    if (block_type === 0) {
+                        throw new Error("!reserved:inconsistency-normal-window blocksplit_flag=1 but block_type=0");
+                    }
+
+                    if (switch_point === 1 && block_type !== 2) {
+                        // it seems...
+                        throw new Error(`!ReadTheF*ckingSpec: switch_point become 1 only if block_type is 2 but ${block_type}`);
+                    }
+
+                    // they from Lagerstrom MP3 Thesis
+                    const region_address1 = (block_type === 2 && switch_point === 0) ? 8 : 7;
+                    const region_address2 = 20 - region_address1;
+
+                    return {
+                        block_split_flag: true, // window_switch(ing)?
+                        block_type,
+                        switch_point, // mixed_block?
+                        table_select,
+                        subblock_gain,
+                        region_address1,
+                        region_address2,
+                    } as const;
+                } else {
+                    // normal window
+                    const table_select = [];
+                    for (const region of times(3)) {
+                        table_select.push(await r.readbits(5));
+                    }
+                    const region_address1 = await r.readbits(4);
+                    const region_address2 = await r.readbits(3);
+
+                    return {
+                        block_split_flag: false, // window_switch?
+                        block_type: 0,
+                        switch_point: null, // mixed_block?
+                        table_select,
+                        subblock_gain: null,
+                        region_address1,
+                        region_address2,
+                    } as const;
                 }
+            })();
+            const preflag = await r.readbits(1);
+            const scalefac_scale = await r.readbits(1);
+            const count1table_select = await r.readbits(1);
 
-                if (switch_point_gr_ch === 1 && block_type_gr_ch !== 2) {
-                    // it seems...
-                    throw new Error(`!ReadTheF*ckingSpec: switch_point become 1 only if block_type is 2 but ${block_type_gr_ch}`);
-                }
-
-                // they from Lagerstrom MP3 Thesis
-                const region_address1_gr_ch = (block_type_gr_ch === 2 && switch_point_gr_ch === 0) ? 8 : 7;
-                const region_address2_gr_ch = 20 - region_address1_gr_ch;
-
-                block_gr.push({
-                    block_split_flag: true, // window_switch(ing)?
-                    block_type: block_type_gr_ch,
-                    switch_point: switch_point_gr_ch, // mixed_block?
-                    table_select: table_select_gr_ch,
-                    subblock_gain: subblock_gain_gr_ch,
-                    region_address1: region_address1_gr_ch,
-                    region_address2: region_address2_gr_ch,
-                } as const);
-            } else {
-                // normal window
-                const table_select_gr_ch = [];
-                for (const region of times(3)) {
-                    table_select_gr_ch.push(await r.readbits(5));
-                }
-                const region_address1_gr_ch = await r.readbits(4);
-                const region_address2_gr_ch = await r.readbits(3);
-
-                block_gr.push({
-                    block_split_flag: false, // window_switch?
-                    block_type: 0,
-                    switch_point: null, // mixed_block?
-                    table_select: table_select_gr_ch,
-                    subblock_gain: null,
-                    region_address1: region_address1_gr_ch,
-                    region_address2: region_address2_gr_ch,
-                } as const);
-            }
-            preflag_gr.push(await r.readbits(1));
-            scalefac_scale_gr.push(await r.readbits(1));
-            count1table_select_gr.push(await r.readbits(1));
+            channel.push({
+                part2_3_length, // in "bits"
+                big_values,
+                global_gain,
+                scalefac_compress,
+                // blocksplit_flag,
+                ...blockpart,
+                preflag,
+                scalefac_scale,
+                count1table_select,
+            });
         }
+        granule_tmp.push({
+            channel,
+        });
+    }
 
-        part2_3_length.push(part2_3_length_gr);
-        big_values.push(big_values_gr);
-        global_gain.push(global_gain_gr);
-        scalefac_compress.push(scalefac_compress_gr);
-        block.push(block_gr);
-        preflag.push(preflag_gr);
-        scalefac_scale.push(scalefac_scale_gr);
-        count1table_select.push(count1table_select_gr);
+    // swap gr and ch for beauty of data structure.
+    const channel = [];
+    for (const ch of times(nchans)) {
+        const granule = [];
+        for (const gr of times(2)) {
+            granule.push(granule_tmp[gr].channel[ch]);
+        }
+        channel.push({
+            scfsi: scfsi[ch], // SCaleFactor Selection Information
+            granule,
+        });
     }
 
     return {
-        // per frame
         main_data_end, // in "bytes"
         private_bits,
-
-        // per [ch]
-        scfsi, // SCaleFactor Selection Information
-
-        // per [gr][ch]
-        part2_3_length, // in "bits"
-        big_values,
-        global_gain,
-        scalefac_compress,
-        block,
-        preflag,
-        scalefac_scale,
-        count1table_select,
+        channel,
     };
 };
 
@@ -425,15 +418,17 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
 
     const part3_start = r.tell();
 
+    const sideinfo = frame.sideinfo.channel[ch].granule[gr];
+
     // not "blocktype==2 and switch_point==true"? really block_split_flag?? its always true if blocktype==2!
     // IIS and Lagerstrom uses block_split_flag.
     // mp3decoder(haskell) completely ignores block_split_flag.
-    const is_shortblock = (frame.sideinfo.block[gr][ch].block_type == 2 && frame.sideinfo.block[gr][ch].block_split_flag);
+    const is_shortblock = (sideinfo.block_type == 2 && sideinfo.block_split_flag);
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
-    const bigvalues = frame.sideinfo.big_values[gr][ch] * 2;
-    const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + 1];
+    const bigvalues = sideinfo.big_values * 2;
+    const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const region2start = is_shortblock ? Math.min(576, bigvalues) : scalefactor_band_indices[sampfreq].long[frame.sideinfo.block[gr][ch].region_address1 + frame.sideinfo.block[gr][ch].region_address2 + 2];
+    const region2start = is_shortblock ? Math.min(576, bigvalues) : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
 
     const regionlens = [
         region1start,
@@ -444,15 +439,15 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     if (regionlens[2] < 0) {
         throw new Error(`negative region2len: ${regionlens[2]}`);
     }
-    if (frame.sideinfo.block[gr][ch].block_split_flag && 0 < regionlens[2]) {
+    if (sideinfo.block_split_flag && 0 < regionlens[2]) {
         throw new Error(`block_split but region2: ${regionlens[2]}`);
     }
 
     const is = []; // what is "is"? abbreviated? many I-s? what I?
     for (const region in regionlens) {
-        const hufftab = bigvalueHufftabs[frame.sideinfo.block[gr][ch].table_select[region]];
+        const hufftab = bigvalueHufftabs[sideinfo.table_select[region]];
         if (!hufftab) {
-            throw new Error(`region${region} references bad table: ${frame.sideinfo.block[gr][ch].table_select[region]}`);
+            throw new Error(`region${region} references bad table: ${sideinfo.table_select[region]}`);
         }
         for (const _ of times(regionlens[region])) {
             is.push(...await readhuffbig(r, hufftab[0], hufftab[1]));
@@ -464,7 +459,7 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
         throw new Error(`big_value exceeds part3_length: ${part3_length} < ${bigpartlen}`);
     }
 
-    const hufftab = count1Hufftabs[frame.sideinfo.count1table_select[gr][ch]];
+    const hufftab = count1Hufftabs[sideinfo.count1table_select];
     while (r.tell() - part3_start < part3_length) {
         is.push(...await readhuffcount1(r, hufftab));
     }
@@ -502,16 +497,16 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
         const scalefac_gr = [];
         const is_gr = [];
         for (const ch of times(nchans)) {
-            const block_gr_ch = frame.sideinfo.block[gr][ch];
-            const scalefac_compress_gr_ch = frame.sideinfo.scalefac_compress[gr][ch];
+            const sideinfo = frame.sideinfo.channel[ch].granule[gr];
+            const scalefac_compress_gr_ch = sideinfo.scalefac_compress;
 
             const part2_start = r.tell();
 
             // scale-factors are "part 2"
             const [slen1, slen2] = scalefac_compress_tab[scalefac_compress_gr_ch];
-            if (block_gr_ch.block_type === 2) {
+            if (sideinfo.block_type === 2) {
                 // short-window
-                if (block_gr_ch.switch_point) {
+                if (sideinfo.switch_point) {
                     // long-and-short
                     const scalefac_l = [];
                     for (const band of range(0, 7 + 1)) {
@@ -553,11 +548,11 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
                 await [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]].reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
                     await prev;
                     for (const band of range(sfrbeg, sfrend + 1)) {
-                        if (gr === 0 || !frame.sideinfo.scfsi[ch][group]) {
+                        if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
                             scalefac_l[band] = await r.readbits(slen);
                         } else {
                             // copy from granule 0 if gr===1 && scfsi===1
-                            if (block_gr_ch.block_type === 2) {
+                            if (sideinfo.block_type === 2) {
                                 throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
                             }
                             const scalefac_gr0 = scalefac[0][ch];
@@ -579,7 +574,7 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
             const part2_length = r.tell() - part2_start;
 
             // read huffman "part 3"
-            const part3_length = frame.sideinfo.part2_3_length[gr][ch] - part2_length;
+            const part3_length = sideinfo.part2_3_length - part2_length;
             is_gr.push(await readhuffman(r, frame, part3_length, gr, ch));
         }
         scalefac.push(scalefac_gr);
