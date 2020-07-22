@@ -428,16 +428,16 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     const bigvalues = sideinfo.big_values * 2;
     const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const region2start = is_shortblock ? Math.min(576, bigvalues) : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
+    const region2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
 
     const regionlens = [
         region1start,
         region2start - region1start,
-        bigvalues - region2start,
+        Math.max(0, bigvalues - region2start), // they naturally overruns to indicate "no region2"
     ];
 
-    if (regionlens[2] < 0) {
-        throw new Error(`negative region2len: ${regionlens[2]}`);
+    if (bigvalues < region2start && region2start !== 576) {
+        throw new Error(`abnormal negative region2len: bigvalues=${bigvalues} < region2start=${region2start}`);
     }
     if (sideinfo.block_split_flag && 0 < regionlens[2]) {
         throw new Error(`block_split but region2: ${regionlens[2]}`);
@@ -445,11 +445,16 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
 
     const is = []; // what is "is"? abbreviated? many I-s? what I?
     for (const region in regionlens) {
+        const regionlen = regionlens[region];
+        if (regionlen === 0) {
+            // block_split_flag=true then table_select[2] is undefined!
+            continue;
+        }
         const hufftab = bigvalueHufftabs[sideinfo.table_select[region]];
         if (!hufftab) {
             throw new Error(`region${region} references bad table: ${sideinfo.table_select[region]}`);
         }
-        for (const _ of times(regionlens[region])) {
+        for (const _ of times(regionlen / 2)) { // they are raw "is" count... here reads by 2.
             is.push(...await readhuffbig(r, hufftab[0], hufftab[1]));
         }
     }
@@ -457,6 +462,9 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     const bigpartlen = r.tell() - part3_start;
     if (part3_length < bigpartlen) {
         throw new Error(`big_value exceeds part3_length: ${part3_length} < ${bigpartlen}`);
+    }
+    if (bigpartlen < part3_length && 576 <= is.length) {
+        throw new Error("is already filled but garbage bits");
     }
 
     const hufftab = count1Hufftabs[sideinfo.count1table_select];
