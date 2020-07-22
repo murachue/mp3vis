@@ -426,17 +426,21 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     const is_shortblock = (sideinfo.block_type == 2 && sideinfo.block_split_flag);
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
-    const region1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
+    // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
+    const rawregion1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
+    const region1start = Math.min(bigvalues, rawregion1start); // region1start also may overruns
+    // rawregion2start naturally overruns to indicate "no region2"
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const region2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
+    const rawregion2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
+    const region2start = Math.min(bigvalues, rawregion2start);
 
     const regionlens = [
         region1start,
         region2start - region1start,
-        Math.max(0, bigvalues - region2start), // they naturally overruns to indicate "no region2"
+        bigvalues - region2start,
     ];
 
-    if (bigvalues < region2start && region2start !== 576) {
+    if (bigvalues < region2start && rawregion2start !== 576) {
         throw new Error(`abnormal negative region2len: bigvalues=${bigvalues} < region2start=${region2start}`);
     }
     if (sideinfo.block_split_flag && 0 < regionlens[2]) {
@@ -613,9 +617,13 @@ export async function parsefile(ab: ArrayBuffer) {
         const pos = br.tell();
         try {
             frames.push(await readframe(br));
-            const framedata = await decodeframe(frames.slice(-3, -1), frames[frames.length - 1]); // recent 3 frames including current.
-            if (framedata) {
-                maindatas.push(framedata);
+            try {
+                const framedata = await decodeframe(frames.slice(-3, -1), frames[frames.length - 1]); // recent 3 frames including current.
+                if (framedata) {
+                    maindatas.push(framedata);
+                }
+            } catch{
+                // ignore for main_data decoding
             }
         } catch {
             // try next byte, synchronizing to byte
