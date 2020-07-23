@@ -503,7 +503,7 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     const r = new U8BitReader(main_data);
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
-    const scalefac: ({ type: "switch", scalefac_l: number[], scalefac_s_w: number[][]; } | { type: "short", scalefac_s: number[]; } | { type: "long", scalefac_l: number[]; })[][] = [];
+    const scalefac: ({ type: "switch", scalefac_l: number[], scalefac_s_w: number[][]; } | { type: "short", scalefac_s: number[][]; } | { type: "long", scalefac_l: number[]; })[][] = [];
     const is = [];
     for (const gr of times(2)) {
         const scalefac_gr = [];
@@ -529,7 +529,7 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
                         for (const band of range(sfrbeg, sfrend + 1)) {
                             const scalefac_s_w_band = [];
                             for (const window of times(3)) {
-                                scalefac_s_w_band[window] = await r.readbits(slen);
+                                scalefac_s_w_band.push(await r.readbits(slen));
                             }
                             scalefac_s_w[band] = scalefac_s_w_band;
                         }
@@ -544,7 +544,12 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
                     const scalefac_s = [];
                     for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
                         for (const band of range(sfrbeg, sfrend + 1)) {
-                            scalefac_s[band] = await r.readbits(slen);
+                            // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
+                            const scalefac_s_w_band = [];
+                            for (const window of times(3)) {
+                                scalefac_s_w_band.push(await r.readbits(slen));
+                            }
+                            scalefac_s[band] = scalefac_s_w_band;
                         }
                     }
                     scalefac_gr.push({
