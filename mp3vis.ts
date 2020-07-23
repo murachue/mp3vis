@@ -635,6 +635,8 @@ export async function parsefile(ab: ArrayBuffer) {
             br.seek(Math.floor(pos / 8 + 1) * 8);
         }
     }
-    console.log(frames);
-    console.log(maindatas);
+    return {
+        frames,
+        maindatas,
+    };
 };
