@@ -378,8 +378,8 @@ async function readhuffsymbol(r: U8BitReader, tab: readonly any[]) {
 }
 
 async function readlinsign(r: U8BitReader, linbits: number, rawx: number) {
-    // ternary just for speed optimization
-    const x = rawx + (linbits ? await r.readbits(linbits) : 0);
+    // linbits only when value is maximum.
+    const x = rawx + ((linbits && rawx === 15) ? await r.readbits(linbits) : 0);
     if (x === 0) {
         // no sign bit transferred.
         return 0;
