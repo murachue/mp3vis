@@ -261,7 +261,7 @@ async function readframe(r: U8BitReader) {
     const sampfreq = [44100, 48000, 32000][header.sampling_frequency];
     // TODO: how to measure framebytes in free-format? try to read next sync and then read?? difficult on buffering...
     // const framebytes = sampfreq/1152/* 2granules */;
-    const framebytes = Math.floor(144 * l3bitratekbps * 1000 / sampfreq) + header.padding_bit; // from Lagerstrom MP3 Thesis, but what is 144?
+    const framebytes = Math.floor(144 * l3bitratekbps * 1000 / sampfreq) + header.padding_bit; // from Lagerstrom MP3 Thesis. also in ISO 11172-3 2.4.3.1.
     const data = await r.readbytes(framebytes - headbytes);
     return {
         offset,
@@ -484,15 +484,20 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
         throw new Error(`is exceeds 576: ${is.length}`);
     }
 
+    const zero_part_begin = is.length;
+
     is.push(...Array(576 - is.length).fill(0));
 
-    return is;
+    return {
+        is,
+        zero_part_begin,
+    };
 }
 
 // ISO 11172-3 2.4.2.7 scalefac_compress
 const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
 
-async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
+async function unpackframe(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
     const main_data = get_main_data(prevframes, frame);
     if (!main_data) {
         // not enough reservoir (started in middle of stream?), can't decode
@@ -503,11 +508,14 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     const r = new U8BitReader(main_data);
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
-    const scalefac: ({ type: "switch", scalefac_l: number[], scalefac_s_w: number[][]; } | { type: "short", scalefac_s: number[][]; } | { type: "long", scalefac_l: number[]; })[][] = [];
-    const is = [];
+    const granule/* : {
+        channel: {
+            scalefac: { type: "switch", scalefac_l: number[], scalefac_s: number[][]; } | { type: "short", scalefac_s: number[][]; } | { type: "long", scalefac_l: number[]; };
+            is: number[];
+        }[];
+    }[] */ = [];
     for (const gr of times(2)) {
-        const scalefac_gr = [];
-        const is_gr = [];
+        const channel = [];
         for (const ch of times(nchans)) {
             const sideinfo = frame.sideinfo.channel[ch].granule[gr];
             const scalefac_compress_gr_ch = sideinfo.scalefac_compress;
@@ -515,87 +523,118 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
             const part2_start = r.tell();
 
             // scale-factors are "part 2"
-            const [slen1, slen2] = scalefac_compress_tab[scalefac_compress_gr_ch];
-            if (sideinfo.block_type === 2) {
-                // short-window
-                if (sideinfo.switch_point) {
-                    // long-and-short
-                    const scalefac_l = [];
-                    for (const band of range(0, 7 + 1)) {
-                        scalefac_l[band] = await r.readbits(slen1);
-                    }
-                    const scalefac_s_w = [];
-                    for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) { // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s
-                        for (const band of range(sfrbeg, sfrend + 1)) {
-                            const scalefac_s_w_band = [];
-                            for (const window of times(3)) {
-                                scalefac_s_w_band.push(await r.readbits(slen));
-                            }
-                            scalefac_s_w[band] = scalefac_s_w_band;
+            const scalefac_gr_ch = await (async () => {
+                const [slen1, slen2] = scalefac_compress_tab[scalefac_compress_gr_ch];
+                if (sideinfo.block_type === 2) {
+                    // short-window
+                    if (sideinfo.switch_point) {
+                        // long-and-short
+                        const scalefac_l = [];
+                        for (const band of range(0, 7 + 1)) {
+                            scalefac_l[band] = await r.readbits(slen1);
                         }
+                        const scalefac_s = [];
+                        for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) { // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s
+                            for (const band of range(sfrbeg, sfrend + 1)) {
+                                const scalefac_s_w_band = [];
+                                for (const window of times(3)) {
+                                    scalefac_s_w_band.push(await r.readbits(slen));
+                                }
+                                scalefac_s[band] = scalefac_s_w_band;
+                            }
+                        }
+                        return {
+                            type: "switch",
+                            scalefac_l,
+                            scalefac_s,
+                        } as const;
+                    } else {
+                        // short
+                        const scalefac_s = [];
+                        for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
+                            for (const band of range(sfrbeg, sfrend + 1)) {
+                                // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
+                                const scalefac_s_w_band = [];
+                                for (const window of times(3)) {
+                                    scalefac_s_w_band.push(await r.readbits(slen));
+                                }
+                                scalefac_s[band] = scalefac_s_w_band;
+                            }
+                        }
+                        return {
+                            type: "short",
+                            scalefac_s,
+                        } as const;
                     }
-                    scalefac_gr.push({
-                        type: "switch",
-                        scalefac_l,
-                        scalefac_s_w,
-                    } as const);
                 } else {
-                    // short
-                    const scalefac_s = [];
-                    for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
+                    // long-window
+                    // slen1 for 0..10, slen2 for 11..20
+                    // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
+                    const scalefac_l: number[] = [];
+                    await [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]].reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
+                        await prev;
                         for (const band of range(sfrbeg, sfrend + 1)) {
-                            // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
-                            const scalefac_s_w_band = [];
-                            for (const window of times(3)) {
-                                scalefac_s_w_band.push(await r.readbits(slen));
+                            if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
+                                scalefac_l[band] = await r.readbits(slen);
+                            } else {
+                                // copy from granule 0 if gr===1 && scfsi===1
+                                if (sideinfo.block_type === 2) {
+                                    throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
+                                }
+                                // const scalefac_gr0 = granule[0].channel[ch].scalefac;
+                                // // const scalefac_l_gr0 = (scalefac_gr0 as { scalefac_l: number[]; }).scalefac_l;
+                                // if (scalefac_gr0.type !== "long") {
+                                //     throw new Error(`BadImpl: window mutated between granule: ${scalefac_gr0}`);
+                                // }
+                                // const scalefac_l_gr0 = scalefac_gr0.scalefac_l;
+                                // scalefac_l[band] = scalefac_l_gr0[band];
+
+                                // fill it later
+                                scalefac_l[band] = 0;
                             }
-                            scalefac_s[band] = scalefac_s_w_band;
                         }
-                    }
-                    scalefac_gr.push({
-                        type: "short",
-                        scalefac_s,
-                    } as const);
+                    }, Promise.resolve());
+                    return {
+                        type: "long",
+                        scalefac_l,
+                    } as const;
                 }
-            } else {
-                // long-window
-                // slen1 for 0..10, slen2 for 11..20
-                // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
-                const scalefac_l: number[] = [];
-                await [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]].reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
-                    await prev;
-                    for (const band of range(sfrbeg, sfrend + 1)) {
-                        if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
-                            scalefac_l[band] = await r.readbits(slen);
-                        } else {
-                            // copy from granule 0 if gr===1 && scfsi===1
-                            if (sideinfo.block_type === 2) {
-                                throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
-                            }
-                            const scalefac_gr0 = scalefac[0][ch];
-                            // const scalefac_l_gr0 = (scalefac_gr0 as { scalefac_l: number[]; }).scalefac_l;
-                            if (scalefac_gr0.type !== "long") {
-                                throw new Error(`BadImpl: window mutated between granule: ${scalefac_gr0}`);
-                            }
-                            const scalefac_l_gr0 = scalefac_gr0.scalefac_l;
-                            scalefac_l[band] = scalefac_l_gr0[band];
-                        }
-                    }
-                }, Promise.resolve());
-                scalefac_gr.push({
-                    type: "long",
-                    scalefac_l,
-                } as const);
-            }
+            })();
 
             const part2_length = r.tell() - part2_start;
 
             // read huffman "part 3"
             const part3_length = sideinfo.part2_3_length - part2_length;
-            is_gr.push(await readhuffman(r, frame, part3_length, gr, ch));
+            const is_gr_ch = await readhuffman(r, frame, part3_length, gr, ch);
+
+            channel.push({
+                scalefac: scalefac_gr_ch,
+                is: is_gr_ch,
+            });
         }
-        scalefac.push(scalefac_gr);
-        is.push(is_gr);
+        granule.push({ channel });
+    }
+
+    // copy scalefac if scfsi
+    const band_groups = [[0, 5], [6, 10], [11, 15], [16, 20]];
+    for (const ch of times(nchans)) {
+        for (const group in band_groups) {
+            if (!frame.sideinfo.channel[ch].scfsi[group]) {
+                break;
+            }
+            const scalefac_gr0_ch = granule[0].channel[ch].scalefac;
+            if (scalefac_gr0_ch.type !== "long") {
+                throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
+            }
+            const scalefac_gr1_ch = granule[1].channel[ch].scalefac;
+            if (scalefac_gr1_ch.type !== "long") {
+                throw new Error(`scfsi but gr1 not long: ${scalefac_gr1_ch.type}`);
+            }
+            const [sfrbegin, sfrend] = band_groups[group];
+            for (const band of range(sfrbegin, sfrend)) {
+                scalefac_gr1_ch.scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
+            }
+        }
     }
 
     const ancillary_nbits = (8 - r.tell() % 8) % 8;
@@ -605,8 +644,7 @@ async function decodeframe(prevframes: PromiseType<ReturnType<typeof readframe>>
     return {
         main_data,
 
-        scalefac,
-        is,
+        granule,
 
         ancillary_nbits,
         ancillary_bits,
@@ -621,9 +659,10 @@ export async function parsefile(ab: ArrayBuffer) {
     while (!br.eof()) {
         const pos = br.tell();
         try {
-            frames.push(await readframe(br));
+            const frame = await readframe(br);
+            frames.push(frame);
             try {
-                const framedata = await decodeframe(frames.slice(-3, -1), frames[frames.length - 1]); // recent 3 frames including current.
+                const framedata = await unpackframe(frames.slice(-3, -1), frame); // recent 2 frames and current.
                 if (framedata) {
                     maindatas.push(framedata);
                 }
