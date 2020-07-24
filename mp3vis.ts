@@ -942,6 +942,7 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
                 continue;
             }
 
+            // from Lagerstrom MP3 Thesis. but it is reordered to a0,b0,c0,a1,b1,c1,a2,... ??
             const index_win = index + len * window;
             const [left, right] = ratio;
             for (const i of times(len)) {
