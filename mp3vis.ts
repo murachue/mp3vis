@@ -175,7 +175,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
 
                     return {
                         block_split_flag: true, // window_switch(ing)?
-                        block_type,
+                        block_type, // 0=reserved(normal) 1=start_block 2=3_short_windows 3=end_block
                         switch_point, // mixed_block?
                         table_select,
                         subblock_gain,
@@ -807,6 +807,8 @@ function requantize(frame: FrameType, maindata: MaindataType) {
     };
 }
 
+// TODO: reorder small blocks just for make intensity-stereo processing easy???
+//       but intensity-stereo processing seems also wrong...?????
 function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
@@ -1017,7 +1019,6 @@ const antiAliasCoeffs = [-0.6, -0.535, -0.33, -0.185, -0.095, -0.041, -0.0142, -
 const antiAliasS = antiAliasCoeffs.map(coeff => 1 / Math.sqrt(1 + coeff * coeff));
 const antiAliasA = antiAliasCoeffs.map(coeff => coeff / Math.sqrt(1 + coeff * coeff));
 function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
-    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -1050,7 +1051,7 @@ function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
             channel.push(work.concat(samples.slice(18 * till_sb)));
         }
 
-        granule.push(channel);
+        granule.push({ channel });
     }
 
     return {
@@ -1058,7 +1059,99 @@ function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
     };
 }
 
-function decodeframe(prevsound: { channel: number[][]; } | null, frame: FrameType, maindata: MaindataType) {
+function imdct(src: number[]) {
+    const n_half = src.length;
+    const n = n_half * 2;
+    return times(n).map(p => {
+        const xs = src.map((e, m) => e * Math.cos(Math.PI / (2 * n) * (2 * p + 1 + n_half) * (2 * m + 1)));
+        const sum = xs.reduce((prev, cur) => prev + cur, 0);
+        return sum;
+    });
+}
+
+const imdct_windows = [
+    // block_type 0: normal long block
+    times(36).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
+    // block_type 1: start long block
+    ([] as number[]).concat(
+        times(18).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
+        Array(24 - 18).fill(1),
+        times(30 - 24).map(i => Math.sin(Math.PI / 12 * (i - 18 + 0.5))),
+        Array(36 - 30).fill(0),
+    ),
+    // block_type 2: 3 short block (only 12 elements)
+    times(12).map(i => Math.sin(Math.PI / 12 * (i + 0.5))),
+    // block_type 3: end long block
+    ([] as number[]).concat(
+        Array(6).fill(0),
+        times(12 - 6).map(i => Math.sin(Math.PI / 12 * (i - 6 + 0.5))),
+        Array(18 - 12).fill(1),
+        times(36 - 18).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
+    ),
+];
+
+function imdct_win(src: number[], block_type: number) {
+    if (block_type !== 2) {
+        // longs
+        const timedom = imdct(src);
+        return timedom.map((e, i) => e * imdct_windows[block_type][i]);
+    } else {
+        // short: pad 0 to head and tail, and overlap 3 blocks here, to make caller overlaps easier.
+        // TODO: can't be simpler more?
+        const timedom_ws = times(3).map(window => imdct(range(window, 36, 3).map(i => src[i])));
+        const shaped_ws = timedom_ws.map(timedom => timedom.map((e, i) => e * imdct_windows[2][i]));
+        const lapped: number[] = Array(36).fill(0);
+        shaped_ws.forEach((shaped, window) => {
+            shaped.forEach((e, i) => {
+                lapped[(1 + window) * 6 + i] += e;
+            });
+        });
+        return lapped;
+    }
+}
+
+type PrevSoundType = {
+    channel: {
+        subband: number[][];
+    }[];
+} | null;
+
+function hybridsynth(frame: FrameType, maindata: MaindataType, rawprevsound: PrevSoundType, antialiased: ReturnType<typeof antialias>) {
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+    let prevsound = rawprevsound || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
+
+    const granule: NonNullable<PrevSoundType>[] = [];
+    for (const gr of times(2)) {
+        const channel: NonNullable<PrevSoundType>["channel"] = [];
+        for (const ch of times(nchans)) {
+            const samples = antialiased.granule[gr].channel[ch];
+            const subband: NonNullable<PrevSoundType>["channel"][number]["subband"] = [];
+            for (const sb of times(32)) {
+                const sideinfo = frame.sideinfo.channel[ch].granule[gr];
+                const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
+                // fake block_type=0(normal) if mixed_block and sb < 2 (even-point).
+                // technique taken from Lagerstrom MP3 Thesis.
+                const btype = (is_mixed_block && sb < 2) ? 0 : sideinfo.block_type;
+                const timedom = imdct_win(samples.slice(18 * sb, 18 * (sb + 1)), btype);
+                const mixed = timedom.map((e, i) => e + prevsound.channel[ch].subband[sb][i]);
+
+                subband.push(mixed);
+            }
+
+            channel.push({ subband });
+        }
+
+        granule.push({ channel });
+        prevsound = { channel };
+    }
+
+    return {
+        granule,
+    };
+}
+
+function decodeframe(prevsound: PrevSoundType, frame: FrameType, maindata: MaindataType) {
     // scalefactor, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
@@ -1067,17 +1160,14 @@ function decodeframe(prevsound: { channel: number[][]; } | null, frame: FrameTyp
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
     // filterbanks, in "equally-18-width band" world...
-    const channel = [];
-    for (const ch of times(nchans)) {
-        const antialiased = antialias(frame, stereoed);
-        // hybridsynth(); // IMDCT, windowing and overlap adding are called "hybrid filter bank"
-        // freqinv();
-        // subbandsynth();
-        channel.push([0]); // TODO
-    }
+    const antialiased = antialias(frame, stereoed);
+    // IMDCT, windowing and overlap adding are called "hybrid filter bank"
+    const timedomain = hybridsynth(frame, maindata, prevsound, antialiased);
+    // freqinv();
+    // subbandsynth();
 
     return {
-        channel,
+        // TODO
     };
 }
 
