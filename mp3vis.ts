@@ -171,7 +171,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
 
                     // they from Lagerstrom MP3 Thesis
                     const region_address1 = (block_type === 2 && switch_point === 0) ? 8 : 7;
-                    const region_address2 = 20 - region_address1;
+                    const region_address2 = 20 - region_address1; // means no region2 (region_address2 points to end of bands)
 
                     return {
                         block_split_flag: true, // window_switch(ing)?
@@ -355,6 +355,7 @@ export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number
 ];
 
 // 0..21+end(long) and 0..12+end(short) subbands. used for region_address to subbands, and requantize.
+// tips: 36 = long[8] = short[3] * 3(=windows) is even point for block_split(type: "mixed").
 const scalefactor_band_indices = {
     44100: {
         long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
@@ -430,11 +431,13 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     // not "blocktype==2 and switch_point==true"? really block_split_flag?? its always true if blocktype==2!
     // IIS and Lagerstrom uses block_split_flag.
     // mp3decoder(haskell) completely ignores block_split_flag.
+    // but also region_start* are set (const) even when block_type==2??
     const is_shortblock = (sideinfo.block_type == 2 && sideinfo.block_split_flag);
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
-    const rawregion1start = is_shortblock ? 36/*long[8]*/ : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
+    // note: all long[8] is 36.
+    const rawregion1start = is_shortblock ? scalefactor_band_indices[sampfreq].long[8] : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
     const region1start = Math.min(bigvalues, rawregion1start); // region1start also may overruns
     // rawregion2start naturally overruns to indicate "no region2"
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
@@ -536,12 +539,16 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                     // short-window
                     if (sideinfo.switch_point) {
                         // long-and-short
+                        // even point (in samples) is 36. it is long[8] and short[3] * 3 in bands.
+                        // long does not include 36, short does.
                         const scalefac_l = [];
                         for (const band of range(0, 7 + 1)) {
                             scalefac_l[band] = await r.readbits(slen1);
                         }
                         const scalefac_s = [];
-                        for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) { // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s
+                        // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s,
+                        // but not from ISO 11172-3 2.4.2.7 scalefac_compress[gr] (it says 4..5, 6..11).
+                        for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
                             for (const band of range(sfrbeg, sfrend + 1)) {
                                 const scalefac_s_w_band = [];
                                 for (const window of times(3)) {
@@ -659,10 +666,164 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
     };
 }
 
+type MaindataType = NonNullable<PromiseType<ReturnType<typeof unpackframe>>>;
+
+// pretab: "shortcut" to scalefactor. this can be used to make finally encoded scalefac smaller on higher freq band.
+// only for long blocks, in subbands.
+const pretab = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2];
+// some preps for pretab_i...
+const array_cons_diff = (arr: readonly number[]) => {
+    const diff = arr.map((e, i) => arr[i + 1] - e);
+    diff.pop(); // last is invalid (NaN)
+    return diff;
+};
+const object_values_map = <K extends string | number, V, VA>(obj: Record<K, V>, fn: (value: V) => VA): Record<K, VA> => {
+    return Object.assign({}, ...Object.entries(obj as { [k: string]: V; }).map(([k, v]) => ({ [k]: fn(v) })));
+};
+const subbands_long_lengths = object_values_map(scalefactor_band_indices, v => array_cons_diff(v.long));
+const subbands_short_lengths = object_values_map(scalefactor_band_indices, v => array_cons_diff(v.short));
+// processed for easily zipped with "is"
+const pretab_i = object_values_map(subbands_long_lengths, v => v.flatMap((len, i) => Array(len).fill(pretab[i])) as number[]);
+const pretab_zero_i = Array(576).fill(0);
+
+// just (corrected) naive implementation of ISO 11172-3 2.4.3.4 "Formula for requantization and all scaling"...
+function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, pre: number, global_gain: number, subblock_gain: number) {
+    // mysterious is[i]^(4/3) scaling (with negative support).
+    const prescaled = Math.pow(Math.abs(rawsample), 4 / 3) * (rawsample < 0 ? -1 : 1);
+    // scaledown to 0...1.0, int2frac.
+    // pre: only with long-block.
+    // expression is simplified:
+    //   2 ^ ...
+    //      .25 * (- 2 * (1 + scalestep) * scalefac - 2 * (1 + scale_step) * pre)
+    //     =.5 * (- (1 + scalestep) * scalefac - (1 + scale_step) * pre)
+    //     =.5 * (- (1 + scalestep) * (scalefac + pre))
+    //     -- scalestep is 0 or 1.
+    //     =.5 * (- {1 or 2} * (scalefac + pre))
+    //     =- {0.5 or 1} * (scalefac + pre)
+    const frac = prescaled * Math.pow(2, -(scale_step * (scalefac + pre)));
+    // apply gain.
+    // 210 is magic. !!in spec it is 64
+    // subblock_gain: only with short-block (incl. mixed).
+    const gained = frac * Math.pow(2, 0.25 * (global_gain - 210 - 8 * subblock_gain));
+    return gained;
+}
+
+type SideinfoOfOneBlock = FrameType["sideinfo"]["channel"][number]["granule"][number];
+type MaindataOfOneBlock = MaindataType["granule"][number]["channel"][number];
+// TODO: un-copy-paste (prepare requantizeLongTill and requantizeShortFrom)
+function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
+    const scale_step = sideinfo_gr_ch.scalefac_scale ? 1 : 0.5; // 0=sqrt2 1=2
+    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
+    const is = maindata_gr_ch.is.is;
+
+    switch (maindata_gr_ch.scalefac.type) {
+        case "long": { // sideinfo.block_type !== 2
+            const pretab_i_freq = sideinfo_gr_ch.preflag ? pretab_i[sampfreq] : pretab_zero_i;
+            // padding 0 for scalefac_l.length==21 but subbands_long_lengths.length==22
+            // XXX: is it ensured that zero_part_begin does not exceeds long_band[21]==418/384/550??
+            const scalefac = maindata_gr_ch.scalefac.scalefac_l.concat([0]);
+            // process for easily zipped with "is"
+            const scalefac_i = subbands_long_lengths[sampfreq].flatMap((len, i) => Array(len).fill(scalefac[i])) as number[];
+
+            // XXX: we should only do 0...zero_part_begin for speed optimization.
+            return is.map((rawsample, i) => {
+                return requantizeSample(rawsample, scale_step, scalefac_i[i], pretab_i_freq[i], sideinfo_gr_ch.global_gain, 0);
+            });
+        }
+        case "short": { // sideinfo.switch_point === 0
+            const band_len = subbands_short_lengths[sampfreq];
+            const scalefac = maindata_gr_ch.scalefac.scalefac_s;
+
+            // XXX: we should only do 0...zero_part_begin for speed optimization.
+            const requantized = [];
+            let i = 0;
+            for (const band of times(12)) {
+                for (const win of times(3)) {
+                    for (const band_i of times(band_len[band])) {
+                        const rawsample = is[i];
+                        // if block_type==2 then block_split_flag==1 and there is subblock_gain.
+                        const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], 0, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain![win]);
+                        i++;
+                        requantized.push(rs);
+                    }
+                }
+            }
+            return requantized;
+        }
+        case "mixed": { // else (block_type === 2 && switch_point === 1)
+            // so complicate...
+
+            // till even point 36, requantize as long. but not preflag.
+            const scalefac_l = maindata_gr_ch.scalefac.scalefac_l.slice(0, 8);
+            // process for easily zipped with "is"
+            const scalefac_l_i = subbands_long_lengths[sampfreq].slice(0, 8).flatMap((len, i) => Array(len).fill(scalefac_l[i])) as number[];
+            // XXX: we should only do 0...zero_part_begin for speed optimization.
+            const long_requantized = is.slice(36).map((rawsample, i) => {
+                return requantizeSample(rawsample, scale_step, scalefac_l_i[i], 0, sideinfo_gr_ch.global_gain, 0);
+            });
+
+            // from even point 36, requantize as short.
+            const band_len = subbands_short_lengths[sampfreq];
+            const scalefac_s = maindata_gr_ch.scalefac.scalefac_s;
+            // XXX: we should only do 0...zero_part_begin for speed optimization.
+            const short_requantized = [];
+            let i = 36; // from sample 36
+            for (const band of range(3, 12)) { // start from short band 3
+                for (const win of times(3)) {
+                    for (const band_i of times(band_len[band])) {
+                        const rawsample = is[i];
+                        // if block_type==2 then block_split_flag==1 and there is subblock_gain.
+                        const rs = requantizeSample(rawsample, scale_step, scalefac_s[band][win], 0, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain![win]);
+                        i++;
+                        short_requantized.push(rs);
+                    }
+                }
+            }
+            return long_requantized.concat(short_requantized);
+        }
+        // default:
+        //     throw new Error(`bad type: ${maindata_gr_ch.scalefac.type}`);
+    }
+}
+
+function requantize(frame: FrameType, maindata: MaindataType) {
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+
+    const granule = [];
+    for (const gr of times(2)) {
+        const channel = [];
+        for (const ch of times(nchans)) {
+            const sideinfo_gr_ch = frame.sideinfo.channel[ch].granule[gr];
+            const maindata_gr_ch = maindata.granule[gr].channel[ch];
+            channel.push(requantizeOne(frame, sideinfo_gr_ch, maindata_gr_ch));
+        }
+
+        granule.push({ channel });
+    }
+
+    return {
+        granule,
+    };
+}
+
+function decodeframe(frame: FrameType, maindata: MaindataType) {
+    const requantized = requantize(frame, maindata);
+    // const reordered = reorder(requantized);
+    // stereo();
+    // for (const ch of times(...)) {
+    //     antialias();
+    //     hybridsynth(); // IMDCT, windowing and overlap adding are called "hybrid filter bank"
+    //     freqinv();
+    //     subbandsynth();
+    // }
+}
+
 export async function parsefile(ab: ArrayBuffer) {
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
     const maindatas = [];
+    const soundframes = [];
     while (!br.eof()) {
         const pos = br.tell();
         try {
@@ -672,6 +833,9 @@ export async function parsefile(ab: ArrayBuffer) {
                 const framedata = await unpackframe(frames.slice(-3, -1), frame); // recent 2 frames and current.
                 if (framedata) {
                     maindatas.push(framedata);
+
+                    const sound = decodeframe(frame, framedata);
+                    soundframes.push(sound);
                 }
             } catch{
                 // ignore for main_data decoding
@@ -684,5 +848,6 @@ export async function parsefile(ab: ArrayBuffer) {
     return {
         frames,
         maindatas,
+        soundframes,
     };
 };
