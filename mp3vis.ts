@@ -807,9 +807,55 @@ function requantize(frame: FrameType, maindata: MaindataType) {
     };
 }
 
+function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+
+    const granule = [];
+    for (const gr of times(2)) {
+        const channel = [];
+        for (const ch of times(nchans)) {
+            const requantized_gr_ch = requantized.granule[gr].channel[ch];
+
+            if (frame.sideinfo.channel[ch].granule[gr].block_type === 0) {
+                // long window is not reordered.
+                channel.push(requantized_gr_ch);
+                continue;
+            }
+
+            // time-order(freq-interleaved) to freq-order(time-interleaved).
+            //   a[0...3], b[0...3], c[0...3], a[4...], ... (a[4] is next band's)
+            //   => a[0], b[0], c[0], a[1], b[1], c[1], ...
+            //      where a,b,c are each window's.
+            // XXX: we should only do ...zero_part_begin for speed optimization.
+            // do not touch for long area (long_band[<8] = short_band[<3] = samples[<36]) if switch_point.
+            const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+            const band_short_indices = scalefactor_band_indices[sampfreq].short;
+            const band_short_lengths = subbands_short_lengths[sampfreq];
+            const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
+            const reordered = [];
+            for (const band of range(bandFrom, 12)) {
+                const len = band_short_lengths[band];
+                for (const i of times(len)) {
+                    for (const window of times(3)) {
+                        reordered.push(requantized_gr_ch[band_short_indices[band] * 3 + window * len + i]);
+                    }
+                }
+            }
+            channel.push(requantized_gr_ch.slice(0, band_short_indices[bandFrom]).concat(reordered));
+        }
+
+        granule.push(channel);
+    }
+
+    return {
+        granule,
+    };
+}
+
 function decodeframe(frame: FrameType, maindata: MaindataType) {
     const requantized = requantize(frame, maindata);
-    // const reordered = reorder(requantized);
+    const reordered = reorder(frame, requantized);
     // stereo();
     // for (const ch of times(...)) {
     //     antialias();
