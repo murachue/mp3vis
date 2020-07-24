@@ -833,7 +833,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
             const band_short_indices = scalefactor_band_indices[sampfreq].short;
             const band_short_lengths = subbands_short_lengths[sampfreq];
             const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
-            const reordered = [];
+            const reordered = requantized_gr_ch.slice(0, band_short_indices[bandFrom]); // this is copy longs if switch_point, else just [].
             for (const band of range(bandFrom, 12)) {
                 const len = band_short_lengths[band];
                 for (const i of times(len)) {
@@ -842,10 +842,168 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
                     }
                 }
             }
-            channel.push(requantized_gr_ch.slice(0, band_short_indices[bandFrom]).concat(reordered));
+            channel.push(reordered);
         }
 
-        granule.push(channel);
+        granule.push({ channel });
+    }
+
+    return {
+        granule,
+    };
+}
+
+function intensityRatio(scalefac: number) {
+    if (scalefac === 7) {
+        return null; // no intensity stereo
+    }
+
+    // 0=right...3=center...6=left, almost looks like linear though...
+    if (scalefac === 6) {
+        // "tan((6*PI)/12 = PI/2) needs special treatment!" from Lagerstrom MP3 Thesis.
+        return [1.0, 0.0];
+    } else {
+        const ratio = Math.tan(scalefac * Math.PI / 12);
+        return [
+            ratio / (1 + ratio),
+            1 / (1 + ratio),
+        ];
+    }
+}
+
+function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], till: number) {
+    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+    const processed: number[][] = [[], []];
+
+    for (const band of times(till)) {
+        const index = scalefactor_band_indices[sampfreq].long[band];
+        const len = subbands_long_lengths[sampfreq][band];
+
+        // using channel1(right) zero_part_begin to intensity-stereo band or not.
+        if (index < maindata_gr.channel[1].is.zero_part_begin) {
+            // not intensity-stereo part yet.
+            processed[0].push(...stereosamples[0].slice(index, index + len));
+            processed[1].push(...stereosamples[1].slice(index, index + len));
+            continue;
+        }
+
+        // using channel0(left) scalefac & is to calculate.
+        const scalefac = maindata_gr.channel[0].scalefac;
+        if (scalefac.type === "short") {
+            throw new Error("BadImpl: intensityLongTill but passed short");
+        }
+        const ratio = intensityRatio(scalefac.scalefac_l[band]);
+        if (!ratio) {
+            // not intensity-stereo enabled band.
+            processed[0].push(...stereosamples[0].slice(index, index + len));
+            processed[1].push(...stereosamples[1].slice(index, index + len));
+            continue;
+        }
+
+        const [left, right] = ratio;
+        for (const i of times(len)) {
+            processed[0].push(stereosamples[0][index + i] * left);
+            processed[1].push(stereosamples[0][index + i] * right);
+        }
+    }
+
+    return processed;
+}
+
+// note: return is from "from", not from "0", to make easier to concat() later.
+// note: Lagerstrom MP3 Thesis's intensity stereo short code has a bug: not multiplying but just assigned...
+function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], from: number) {
+    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+    const processed: number[][] = [[], []];
+
+    for (const band of range(from, 12)) {
+        const index = scalefactor_band_indices[sampfreq].short[band] * 3;
+        const len = subbands_short_lengths[sampfreq][band];
+
+        // using channel1(right) zero_part_begin to intensity-stereo band or not.
+        if (index < maindata_gr.channel[1].is.zero_part_begin) {
+            // not intensity-stereo part yet.
+            processed[0].push(...stereosamples[0].slice(index, index + len * 3));
+            processed[1].push(...stereosamples[1].slice(index, index + len * 3));
+            continue;
+        }
+
+        // using channel0(left) scalefac & is to calculate.
+        for (const window of times(3)) {
+            const scalefac = maindata_gr.channel[0].scalefac;
+            if (scalefac.type === "long") {
+                throw new Error("BadImpl: intensityShortFrom but passed long");
+            }
+            const ratio = intensityRatio(scalefac.scalefac_s[band][window]);
+            if (!ratio) {
+                // not intensity-stereo enabled band.
+                processed[0].push(...stereosamples[0].slice(index, index + len));
+                processed[1].push(...stereosamples[1].slice(index, index + len));
+                continue;
+            }
+
+            const index_win = index + len * window;
+            const [left, right] = ratio;
+            for (const i of times(len)) {
+                processed[0].push(stereosamples[0][index_win + i] * left);
+                processed[1].push(stereosamples[0][index_win + i] * right);
+            }
+        }
+    }
+
+    return processed;
+}
+
+// Intensity Stereo processing is complecated because of different factors for long and short * 3...
+function intensitystereo(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][]) {
+    const type = maindata_gr.channel[0].scalefac.type;
+    switch (type) {
+        case "long": { // sideinfo.block_type !== 2
+            return intensityLongTill(gr, frame, maindata_gr, stereosamples, 21);
+        }
+        case "short": { // sideinfo.switch_point === 0
+            return intensityShortFrom(gr, frame, maindata_gr, stereosamples, 0);
+        }
+        case "mixed": { // else (block_type === 2 && switch_point === 1)
+            const [longl, longr] = intensityLongTill(gr, frame, maindata_gr, stereosamples, 8);
+            const [shortl, shortr] = intensityShortFrom(gr, frame, maindata_gr, stereosamples, 3);
+            return [longl.concat(shortl), longr.concat(shortr)];
+        }
+        default:
+            throw new Error(`bad scalefac.type: ${type}`);
+    }
+}
+
+function jointstereo(frame: FrameType, maindata: MaindataType, reordered: ReturnType<typeof reorder>) {
+    if (frame.header.mode !== 1 || frame.header.mode_extension === 0) {
+        // not joint-stereo or both MS and IS are NOT used. do nothing.
+        return reordered;
+    }
+
+    const inv_sqrt2 = 1 / Math.sqrt(2);
+
+    const granule = [];
+    for (const gr of times(2)) {
+        let processed = reordered.granule[gr].channel;
+        // Middle-Side stereo processing.
+        if ((frame.header.mode_extension & 2) !== 0) {
+            const max_pos = Math.max(...times(2).map(ch => maindata.granule[gr].channel[ch].is.zero_part_begin));
+            const ms: number[][] = [[], []];
+            for (const i of times(max_pos)) {
+                ms[0].push((processed[0][i] + processed[1][i]) * inv_sqrt2);
+                ms[1].push((processed[0][i] - processed[1][i]) * inv_sqrt2);
+            }
+            processed = ms;
+        }
+
+        // Intensity stereo processing.
+        if ((frame.header.mode_extension & 1) !== 0) {
+            processed = intensitystereo(gr, frame, maindata.granule[gr], processed);
+        }
+
+        granule.push({
+            channel: [processed]
+        });
     }
 
     return {
@@ -856,7 +1014,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
 function decodeframe(frame: FrameType, maindata: MaindataType) {
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
-    // stereo();
+    const stereoed = jointstereo(frame, maindata, reordered);
     // for (const ch of times(...)) {
     //     antialias();
     //     hybridsynth(); // IMDCT, windowing and overlap adding are called "hybrid filter bank"
