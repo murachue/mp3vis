@@ -355,7 +355,7 @@ export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number
 ];
 
 // 0..21+end(long) and 0..12+end(short) subbands. used for region_address to subbands, and requantize.
-// tips: 36 = long[8] = short[3] * 3(=windows) is even point for block_split(type: "mixed").
+// tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
 const scalefactor_band_indices = {
     44100: {
         long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
@@ -1003,7 +1003,7 @@ function jointstereo(frame: FrameType, maindata: MaindataType, reordered: Return
         }
 
         granule.push({
-            channel: [processed]
+            channel: processed,
         });
     }
 
@@ -1012,16 +1012,73 @@ function jointstereo(frame: FrameType, maindata: MaindataType, reordered: Return
     };
 }
 
-function decodeframe(frame: FrameType, maindata: MaindataType) {
+const antiAliasCoeffs = [-0.6, -0.535, -0.33, -0.185, -0.095, -0.041, -0.0142, -0.0037];
+// ??? magic!
+const antiAliasS = antiAliasCoeffs.map(coeff => 1 / Math.sqrt(1 + coeff * coeff));
+const antiAliasA = antiAliasCoeffs.map(coeff => coeff / Math.sqrt(1 + coeff * coeff));
+function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
+    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+
+    const granule = [];
+    for (const gr of times(2)) {
+        const channel = [];
+        for (const ch of times(nchans)) {
+            const samples = stereoed.granule[gr].channel[ch];
+            const sideinfo = frame.sideinfo.channel[ch].granule[gr];
+            // antialias is only for long-blocks
+            if (sideinfo.block_type === 2 && sideinfo.switch_point === 0) {
+                channel.push(samples);
+                continue;
+            }
+
+            // note: antialias is work with equally-18-width 32-subbands (for filterbank), not oddly scalefac-bands.
+            const till_sb = (sideinfo.block_type === 2) ? 2 : 32; // if block_type===2 then switch_point===1.
+            const work = [...samples.slice(0, 18 * till_sb)]; // copy
+            // "butterfly calculations" from Lagerstrom MP3 Thesis.
+            for (const sb of range(1, till_sb)) {
+                for (const i of times(8)) {
+                    const loweri = 18 * sb - 1 - i;
+                    const upperi = 18 * sb + i;
+                    const lowersamp = work[loweri] * antiAliasS[i] - work[upperi] * antiAliasA[i];
+                    const uppersamp = work[upperi] * antiAliasS[i] - work[loweri] * antiAliasA[i];
+                    work[loweri] = lowersamp;
+                    work[upperi] = uppersamp;
+                }
+            }
+            channel.push(work.concat(samples.slice(18 * till_sb)));
+        }
+
+        granule.push(channel);
+    }
+
+    return {
+        granule,
+    };
+}
+
+function decodeframe(prevsound: { channel: number[][]; } | null, frame: FrameType, maindata: MaindataType) {
+    // scalefactor, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
     const stereoed = jointstereo(frame, maindata, reordered);
-    // for (const ch of times(...)) {
-    //     antialias();
-    //     hybridsynth(); // IMDCT, windowing and overlap adding are called "hybrid filter bank"
-    //     freqinv();
-    //     subbandsynth();
-    // }
+
+    const is_mono = frame.header.mode === 3;
+    const nchans = is_mono ? 1 : 2;
+    // filterbanks, in "equally-18-width band" world...
+    const channel = [];
+    for (const ch of times(nchans)) {
+        const antialiased = antialias(frame, stereoed);
+        // hybridsynth(); // IMDCT, windowing and overlap adding are called "hybrid filter bank"
+        // freqinv();
+        // subbandsynth();
+        channel.push([0]); // TODO
+    }
+
+    return {
+        channel,
+    };
 }
 
 export async function parsefile(ab: ArrayBuffer) {
@@ -1029,6 +1086,7 @@ export async function parsefile(ab: ArrayBuffer) {
     const frames = [];
     const maindatas = [];
     const soundframes = [];
+    let prevsound = null;
     while (!br.eof()) {
         const pos = br.tell();
         try {
@@ -1039,7 +1097,8 @@ export async function parsefile(ab: ArrayBuffer) {
                 if (framedata) {
                     maindatas.push(framedata);
 
-                    const sound = decodeframe(frame, framedata);
+                    const sound = decodeframe(prevsound, frame, framedata);
+                    prevsound = sound;
                     soundframes.push(sound);
                 }
             } catch{
