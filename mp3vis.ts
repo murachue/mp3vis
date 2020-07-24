@@ -272,6 +272,8 @@ async function readframe(r: U8BitReader) {
     };
 };
 
+type FrameType = PromiseType<ReturnType<typeof readframe>>;
+
 // https://stackoverflow.com/a/35633935
 function concat<T extends Uint8Array>(a: T, b: T) {
     const x = new (a.constructor as any)(a.length + b.length);
@@ -281,7 +283,7 @@ function concat<T extends Uint8Array>(a: T, b: T) {
 }
 
 // note: this will return more than enough on tail.
-function get_main_data(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
+function get_main_data(prevframes: FrameType[], frame: FrameType) {
     // ugly but can't flatMap to Uint8Array...
     const reservoir = prevframes.map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
     if (reservoir.length < frame.sideinfo.main_data_end) {
@@ -292,6 +294,7 @@ function get_main_data(prevframes: PromiseType<ReturnType<typeof readframe>>[], 
     return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
 }
 
+// note: they are actually "T=[T,T]|[number,number]" but such union-recursive type tortures typescript compiler...
 const count1Hufftab0: readonly any[] = [[[[[[[1, 0, 1, 1], [1, 1, 1, 1]], [[1, 1, 0, 1], [1, 1, 1, 0]]], [[[0, 1, 1, 1], [0, 1, 0, 1]], [1, 0, 0, 1]]], [[[0, 1, 1, 0], [0, 0, 1, 1]], [[1, 0, 1, 0], [1, 1, 0, 0]]]], [[[0, 0, 1, 0], [0, 0, 0, 1]], [[0, 1, 0, 0], [1, 0, 0, 0]]]], [0, 0, 0, 0]];
 const count1Hufftab1: readonly any[] = [[[[[1, 1, 1, 1], [1, 1, 1, 0]], [[1, 1, 0, 1], [1, 1, 0, 0]]], [[[1, 0, 1, 1], [1, 0, 1, 0]], [[1, 0, 0, 1], [1, 0, 0, 0]]]], [[[[0, 1, 1, 1], [0, 1, 1, 0]], [[0, 1, 0, 1], [0, 1, 0, 0]]], [[[0, 0, 1, 1], [0, 0, 1, 0]], [[0, 0, 0, 1], [0, 0, 0, 0]]]]];
 const bigvalueHufftab1: readonly any[] = [[[[1, 1], [0, 1]], [1, 0]], [0, 0]];
@@ -315,7 +318,7 @@ export const count1Hufftabs = [
     count1Hufftab1,
 ];
 
-// [tab, linbits]
+// null | [tab, linbits]
 export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number])[] = [
     null,
     [bigvalueHufftab1, 0],
@@ -351,6 +354,7 @@ export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number
     [bigvalueHufftab24, 13],
 ];
 
+// 0..21+end(long) and 0..12+end(short) subbands. used for region_address to subbands, and requantize.
 const scalefactor_band_indices = {
     44100: {
         long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
@@ -411,9 +415,12 @@ async function readhuffcount1(r: U8BitReader, tab: readonly any[]) {
 //     |------part3_length(huffman bits)------|       |
 //     |---------big_value*2---------|        |       |
 // [1] | region0 | region1 | region2 | count1 | rzero | [576]
-async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof readframe>>, part3_length: number, gr: number, ch: number) {
+async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: number, gr: number, ch: number) {
     if (part3_length <= 0) {
-        return Array(576).fill(0);
+        return {
+            is: Array(576).fill(0),
+            zero_part_begin: 0,
+        };
     }
 
     const part3_start = r.tell();
@@ -427,11 +434,11 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
-    const rawregion1start = is_shortblock ? 36 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
+    const rawregion1start = is_shortblock ? 36/*long[8]*/ : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
     const region1start = Math.min(bigvalues, rawregion1start); // region1start also may overruns
     // rawregion2start naturally overruns to indicate "no region2"
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const rawregion2start = is_shortblock ? 576 : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
+    const rawregion2start = is_shortblock ? 576/*long[22]*/ : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
     const region2start = Math.min(bigvalues, rawregion2start);
 
     const regionlens = [
@@ -497,7 +504,7 @@ async function readhuffman(r: U8BitReader, frame: PromiseType<ReturnType<typeof 
 // ISO 11172-3 2.4.2.7 scalefac_compress
 const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
 
-async function unpackframe(prevframes: PromiseType<ReturnType<typeof readframe>>[], frame: PromiseType<ReturnType<typeof readframe>>) {
+async function unpackframe(prevframes: FrameType[], frame: FrameType) {
     const main_data = get_main_data(prevframes, frame);
     if (!main_data) {
         // not enough reservoir (started in middle of stream?), can't decode
@@ -544,7 +551,7 @@ async function unpackframe(prevframes: PromiseType<ReturnType<typeof readframe>>
                             }
                         }
                         return {
-                            type: "switch",
+                            type: "mixed",
                             scalefac_l,
                             scalefac_s,
                         } as const;
