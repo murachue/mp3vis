@@ -819,11 +819,13 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
         for (const ch of times(nchans)) {
             const requantized_gr_ch = requantized.granule[gr].channel[ch];
 
-            if (frame.sideinfo.channel[ch].granule[gr].block_type === 0) {
+            if (frame.sideinfo.channel[ch].granule[gr].block_type !== 2) {
                 // long window is not reordered.
                 channel.push(requantized_gr_ch);
                 continue;
             }
+
+            // here, short or long-short(mixed) block.
 
             // time-order(freq-interleaved) to freq-order(time-interleaved).
             //   a[0...3], b[0...3], c[0...3], a[4...], ... (a[4] is next band's)
