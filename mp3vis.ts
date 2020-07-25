@@ -1137,7 +1137,8 @@ function hybridsynth(frame: FrameType, rawprevsound: PrevSoundType, antialiased:
                 const btype = (is_mixed_block && sb < 2) ? 0 : sideinfo.block_type;
                 const timedom = imdct_win(samples.slice(18 * sb, 18 * (sb + 1)), btype);
                 // prev and current(timedom) are already windowed, just add to mix.
-                const mixed = timedom.map((e, i) => e + prevsound.channel[ch].subband[sb][i]);
+                // don't forget to pick only first half (18/36).
+                const mixed = timedom.slice(0, 18).map((e, i) => e + prevsound.channel[ch].subband[sb][i]);
 
                 subband.push(mixed);
             }
