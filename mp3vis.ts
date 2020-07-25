@@ -1112,23 +1112,25 @@ function imdct_win(src: number[], block_type: number) {
     }
 }
 
-type PrevHyGraType = {
+type SubbandsType = {
     channel: {
         subband: number[][];
     }[];
 };
 
-function hybridsynth(frame: FrameType, rawprevsound: PrevHyGraType | null, antialiased: ReturnType<typeof antialias>) {
+function hybridsynth(frame: FrameType, rawprevtail: SubbandsType | null, antialiased: ReturnType<typeof antialias>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
-    let prevsound = rawprevsound || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
+    let prevtail = rawprevtail || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
 
-    const granule: NonNullable<PrevHyGraType>[] = [];
+    const granule: NonNullable<SubbandsType>[] = [];
     for (const gr of times(2)) {
-        const channel: NonNullable<PrevHyGraType>["channel"] = [];
+        const channel: NonNullable<SubbandsType>["channel"] = [];
+        const tail_ch = [];
         for (const ch of times(nchans)) {
             const samples = antialiased.granule[gr].channel[ch];
-            const subband: NonNullable<PrevHyGraType>["channel"][number]["subband"] = [];
+            const subband: NonNullable<SubbandsType>["channel"][number]["subband"] = [];
+            const tail_sb = [];
             for (const sb of times(32)) {
                 const sideinfo = frame.sideinfo.channel[ch].granule[gr];
                 const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
@@ -1136,26 +1138,32 @@ function hybridsynth(frame: FrameType, rawprevsound: PrevHyGraType | null, antia
                 // technique taken from Lagerstrom MP3 Thesis.
                 const btype = (is_mixed_block && sb < 2) ? 0 : sideinfo.block_type;
                 const timedom = imdct_win(samples.slice(18 * sb, 18 * (sb + 1)), btype);
+                const head = timedom.slice(0, 18);
+                const tail = timedom.slice(18);
                 // prev and current(timedom) are already windowed, just add to mix.
-                // don't forget to pick only first half (18/36).
-                const mixed = timedom.slice(0, 18).map((e, i) => e + prevsound.channel[ch].subband[sb][i]);
+                // don't forget to pick only first-half (18/36).
+                const mixed = head.map((e, i) => e + prevtail.channel[ch].subband[sb][i]);
 
                 subband.push(mixed);
+                tail_sb.push(tail);
             }
 
             channel.push({ subband });
+            tail_ch.push({ subband: tail_sb });
         }
 
         granule.push({ channel });
-        prevsound = { channel };
+        prevtail = { channel: tail_ch };
     }
 
     return {
         granule,
+
+        prevtail,
     };
 }
 
-function freqinv(hybridsynthed: ReturnType<typeof hybridsynth>) {
+function freqinv(hybridsynthed: { granule: ReturnType<typeof hybridsynth>["granule"]; }) {
     return {
         granule: hybridsynthed.granule.map(gr => ({
             channel: gr.channel.map(ch => ({
@@ -1349,7 +1357,7 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
     };
 };
 
-function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: PrevHyGraType | null, frame: FrameType, maindata: MaindataType) {
+function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: FrameType, maindata: MaindataType) {
     // requantize, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
@@ -1359,14 +1367,14 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: PrevHyGraType | 
     const antialiased = antialias(frame, stereoed);
     // IMDCT, windowing and overlap adding are called "hybrid filter bank"
     const hysynthed_timedom = hybridsynth(frame, prevsound, antialiased);
-    const freqinved = freqinv(hysynthed_timedom);
+    const freqinved = freqinv({ granule: hysynthed_timedom.granule });
     const sbsynthed = subbandsynth(frame, prev_v_vec_q, freqinved);
 
     return {
         channel: sbsynthed.channel,
 
         // last granule to feed into next hybridsynth, it must be before freqinved (in decode).
-        lastHybridGranule: hysynthed_timedom.granule[1],
+        lastHybridTail: hysynthed_timedom.prevtail,
         v_vec_q: sbsynthed.v_vec_q,
     };
 }
@@ -1376,7 +1384,7 @@ export async function parsefile(ab: ArrayBuffer) {
     const frames = [];
     const maindatas = [];
     const soundframes = [];
-    let prevHybridGranule: PrevHyGraType | null = null;
+    let prevHybridTail: SubbandsType | null = null;
     let prevVVecQ: VVecQType | null = null;
     while (!br.eof()) {
         const pos = br.tell();
@@ -1388,8 +1396,8 @@ export async function parsefile(ab: ArrayBuffer) {
                 if (framedata) {
                     maindatas.push(framedata);
 
-                    const { channel: sound, lastHybridGranule, v_vec_q } = decodeframe(prevVVecQ, prevHybridGranule, frame, framedata);
-                    prevHybridGranule = lastHybridGranule;
+                    const { channel: sound, lastHybridTail, v_vec_q } = decodeframe(prevVVecQ, prevHybridTail, frame, framedata);
+                    prevHybridTail = lastHybridTail;
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
                 }
