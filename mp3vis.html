@@ -20,12 +20,19 @@
 	<div id="dropbox" style="background: #ccc; color:#000; padding: 0px 2em">
 		drag here
 		<p id="info">info shown here</p>
+		<canvas id="wavescope"></canvas>
 	</div>
 	<script src="mp3vis.js"></script>
 	<script>
 		async function parse(ab) {
-			const { frames, maindatas } = await Mp3vis.parsefile(ab);
+			const { frames, maindatas, soundframes } = await Mp3vis.parsefile(ab);
 			document.getElementById("info").innerText = `${frames.length} / ${maindatas.length}`;
+			const canvas = document.getElementById("wavescope");
+			const ctx = canvas.getContext("2d");
+			canvas.width = soundframes.length * soundframes[0][0].length;
+			canvas.height = 100;
+			ctx.fillStyle = "#222";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
 		}
 		const it = document.getElementById("dropbox");
 		it.addEventListener("dragover", (e) => {
