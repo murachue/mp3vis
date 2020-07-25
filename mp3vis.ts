@@ -1112,23 +1112,23 @@ function imdct_win(src: number[], block_type: number) {
     }
 }
 
-type PrevSoundType = {
+type PrevHyGraType = {
     channel: {
         subband: number[][];
     }[];
-} | null;
+};
 
-function hybridsynth(frame: FrameType, rawprevsound: PrevSoundType, antialiased: ReturnType<typeof antialias>) {
+function hybridsynth(frame: FrameType, rawprevsound: PrevHyGraType | null, antialiased: ReturnType<typeof antialias>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
     let prevsound = rawprevsound || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
 
-    const granule: NonNullable<PrevSoundType>[] = [];
+    const granule: NonNullable<PrevHyGraType>[] = [];
     for (const gr of times(2)) {
-        const channel: NonNullable<PrevSoundType>["channel"] = [];
+        const channel: NonNullable<PrevHyGraType>["channel"] = [];
         for (const ch of times(nchans)) {
             const samples = antialiased.granule[gr].channel[ch];
-            const subband: NonNullable<PrevSoundType>["channel"][number]["subband"] = [];
+            const subband: NonNullable<PrevHyGraType>["channel"][number]["subband"] = [];
             for (const sb of times(32)) {
                 const sideinfo = frame.sideinfo.channel[ch].granule[gr];
                 const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
@@ -1309,11 +1309,12 @@ const synth_filter = times(64, i => times(32, j => Math.cos((16 + i) * (2 * j + 
 type VVecQType = {
     channel: number[][][];
 };
-function subbandsynth(frame: FrameType, prev_v_vec_q: VVecQType, freqinved: ReturnType<typeof freqinv>) {
+function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freqinved: ReturnType<typeof freqinv>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
-    let v_vec_q_chs = [...prev_v_vec_q.channel];
+    const prev_v_vec_q = raw_prev_v_vec_q || { channel: times(2, _ => times(16, _ => Array(64).fill(0))) };
+    const v_vec_q_chs = [...prev_v_vec_q.channel];
     const channel: number[][] = [];
     times(nchans, ch => {
         const gr_out: number[] = [];
@@ -1348,7 +1349,7 @@ function subbandsynth(frame: FrameType, prev_v_vec_q: VVecQType, freqinved: Retu
     };
 };
 
-function decodeframe(prev_v_vec_q: VVecQType, prevsound: PrevSoundType, frame: FrameType, maindata: MaindataType) {
+function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: PrevHyGraType | null, frame: FrameType, maindata: MaindataType) {
     // requantize, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
@@ -1375,8 +1376,8 @@ export async function parsefile(ab: ArrayBuffer) {
     const frames = [];
     const maindatas = [];
     const soundframes = [];
-    let prevHybridGranule = null;
-    let prevVVecQ: VVecQType = { channel: [[], []] };
+    let prevHybridGranule: PrevHyGraType | null = null;
+    let prevVVecQ: VVecQType | null = null;
     while (!br.eof()) {
         const pos = br.tell();
         try {
