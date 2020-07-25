@@ -807,7 +807,7 @@ function requantize(frame: FrameType, maindata: MaindataType) {
     };
 }
 
-// TODO: reorder small blocks just for make intensity-stereo processing easy???
+// TODO: reorder short blocks just for make intensity-stereo processing easy???
 //       but intensity-stereo processing seems also wrong...?????
 function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
     const is_mono = frame.header.mode === 3;
@@ -881,7 +881,7 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
         const index = scalefactor_band_indices[sampfreq].long[band];
         const len = subbands_long_lengths[sampfreq][band];
 
-        // using channel1(right) zero_part_begin to intensity-stereo band or not.
+        // using channel1(right) zero_part_begin to identify intensity-stereo band or not.
         if (index < maindata_gr.channel[1].is.zero_part_begin) {
             // not intensity-stereo part yet.
             processed[0].push(...stereosamples[0].slice(index, index + len));
@@ -1130,10 +1130,11 @@ function hybridsynth(frame: FrameType, rawprevsound: PrevSoundType, antialiased:
             for (const sb of times(32)) {
                 const sideinfo = frame.sideinfo.channel[ch].granule[gr];
                 const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
-                // fake block_type=0(normal) if mixed_block and sb < 2 (even-point).
+                // fake block_type=0(normal) if mixed_block and sb < 2 (even-point in subbands).
                 // technique taken from Lagerstrom MP3 Thesis.
                 const btype = (is_mixed_block && sb < 2) ? 0 : sideinfo.block_type;
                 const timedom = imdct_win(samples.slice(18 * sb, 18 * (sb + 1)), btype);
+                // prev and current(timedom) are already windowed, just add to mix.
                 const mixed = timedom.map((e, i) => e + prevsound.channel[ch].subband[sb][i]);
 
                 subband.push(mixed);
