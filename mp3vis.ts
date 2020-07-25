@@ -1116,7 +1116,7 @@ type PrevSoundType = {
     }[];
 } | null;
 
-function hybridsynth(frame: FrameType, maindata: MaindataType, rawprevsound: PrevSoundType, antialiased: ReturnType<typeof antialias>) {
+function hybridsynth(frame: FrameType, rawprevsound: PrevSoundType, antialiased: ReturnType<typeof antialias>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
     let prevsound = rawprevsound || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
@@ -1151,19 +1151,28 @@ function hybridsynth(frame: FrameType, maindata: MaindataType, rawprevsound: Pre
     };
 }
 
+function freqinv(hybridsynthed: ReturnType<typeof hybridsynth>) {
+    // for each 32[subbands] * 18[samples/subband], inverse value on odd-index.
+    return {
+        granule: hybridsynthed.granule.map(gr => ({
+            channel: gr.channel.map(ch => ({
+                subband: ch.subband.map((sb, i) => i % 2 === 1 ? -sb : sb),
+            })),
+        })),
+    };
+}
+
 function decodeframe(prevsound: PrevSoundType, frame: FrameType, maindata: MaindataType) {
     // scalefactor, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
     const stereoed = jointstereo(frame, maindata, reordered);
 
-    const is_mono = frame.header.mode === 3;
-    const nchans = is_mono ? 1 : 2;
     // filterbanks, in "equally-18-width band" world...
     const antialiased = antialias(frame, stereoed);
     // IMDCT, windowing and overlap adding are called "hybrid filter bank"
-    const timedomain = hybridsynth(frame, maindata, prevsound, antialiased);
-    // freqinv();
+    const synthed_timedom = hybridsynth(frame, prevsound, antialiased);
+    const freqinved = freqinv(synthed_timedom);
     // subbandsynth();
 
     return {
