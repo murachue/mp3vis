@@ -1100,7 +1100,7 @@ function imdct_win(src: number[], block_type: number) {
     } else {
         // short: pad 0 to head and tail, and overlap 3 blocks here, to make caller overlaps easier.
         // TODO: can't be simpler more?
-        const timedom_ws = times(3).map(window => imdct(range(window, 36, 3).map(i => src[i])));
+        const timedom_ws = times(3).map(window => imdct(range(window, 18, 3).map(i => src[i]))); // using trick: range start is already offsetted.
         const shaped_ws = timedom_ws.map(timedom => timedom.map((e, i) => e * imdct_windows[2][i]));
         const lapped: number[] = Array(36).fill(0);
         shaped_ws.forEach((shaped, window) => {
