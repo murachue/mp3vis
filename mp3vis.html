@@ -49,7 +49,7 @@
 				ctx.stroke();
 			}
 
-			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => [samples[0][i] * 32767, samples[1][i] * 32767]));
+			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => samples.map(ch => ch[i] * 32767)));
 			const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
 			const a_dl = document.getElementById("dlsample");
 			if (a_dl.href) {
