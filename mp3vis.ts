@@ -356,6 +356,7 @@ export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number
 
 // 0..21+end(long) and 0..12+end(short) subbands. used for region_address to subbands, and requantize.
 // tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
+// TODO: this does not need to object.
 const scalefactor_band_indices = {
     44100: {
         long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
@@ -710,75 +711,58 @@ function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: numb
 
 type SideinfoOfOneBlock = FrameType["sideinfo"]["channel"][number]["granule"][number];
 type MaindataOfOneBlock = MaindataType["granule"][number]["channel"][number];
-// TODO: un-copy-paste (prepare requantizeLongTill and requantizeShortFrom)
+// XXX: arguments are too complicated
+function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, scalefac_l: number[], is: number[], till: number) {
+    // pretab not required for mixed-long, but it is 0 till "till", so it is redundant but ok.
+    const pretab_i_freq = preflag ? pretab_i[sampfreq] : pretab_zero_i;
+    // padding 0 for scalefac_l.length==21 but subbands_long_lengths.length==22
+    // XXX: is it ensured that zero_part_begin does not exceeds long_band[21]==418/384/550??
+    const scalefac = scalefac_l.concat([0]).slice(0, till);
+    // process for easily zipped with "is"
+    const scalefac_i = subbands_long_lengths[sampfreq].slice(0, till).flatMap((len, i) => Array(len).fill(scalefac[i])) as number[];
+
+    // XXX: we should only do 0...zero_part_begin for speed optimization.
+    return is.slice(0, scalefactor_band_indices[sampfreq].long[till]).map((rawsample, i) => {
+        return requantizeSample(rawsample, scale_step, scalefac_i[i], pretab_i_freq[i], global_gain, 0);
+    });
+}
+// XXX: arguments are too complicated
+function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, subblock_gain: number[], scalefac_s: number[][], is: number[], from: number) {
+    const band_len = subbands_short_lengths[sampfreq];
+    const scalefac = scalefac_s;
+
+    // XXX: we should only do 0...zero_part_begin for speed optimization.
+    const requantized = [];
+    let i = scalefactor_band_indices[sampfreq].short[from] * 3;
+    for (const band of range(from, 12)) {
+        for (const win of times(3)) {
+            for (const band_i of times(band_len[band])) {
+                const rawsample = is[i];
+                const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], 0, global_gain, subblock_gain[win]);
+                i++;
+                requantized.push(rs);
+            }
+        }
+    }
+    return requantized;
+}
 function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
     const scale_step = sideinfo_gr_ch.scalefac_scale ? 1 : 0.5; // 0=sqrt2 1=2
     const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
     const is = maindata_gr_ch.is.is;
 
     switch (maindata_gr_ch.scalefac.type) {
-        case "long": { // sideinfo.block_type !== 2
-            const pretab_i_freq = sideinfo_gr_ch.preflag ? pretab_i[sampfreq] : pretab_zero_i;
-            // padding 0 for scalefac_l.length==21 but subbands_long_lengths.length==22
-            // XXX: is it ensured that zero_part_begin does not exceeds long_band[21]==418/384/550??
-            const scalefac = maindata_gr_ch.scalefac.scalefac_l.concat([0]);
-            // process for easily zipped with "is"
-            const scalefac_i = subbands_long_lengths[sampfreq].flatMap((len, i) => Array(len).fill(scalefac[i])) as number[];
-
-            // XXX: we should only do 0...zero_part_begin for speed optimization.
-            return is.map((rawsample, i) => {
-                return requantizeSample(rawsample, scale_step, scalefac_i[i], pretab_i_freq[i], sideinfo_gr_ch.global_gain, 0);
-            });
-        }
-        case "short": { // sideinfo.switch_point === 0
-            const band_len = subbands_short_lengths[sampfreq];
-            const scalefac = maindata_gr_ch.scalefac.scalefac_s;
-
-            // XXX: we should only do 0...zero_part_begin for speed optimization.
-            const requantized = [];
-            let i = 0;
-            for (const band of times(12)) {
-                for (const win of times(3)) {
-                    for (const band_i of times(band_len[band])) {
-                        const rawsample = is[i];
-                        // if block_type==2 then block_split_flag==1 and there is subblock_gain.
-                        const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], 0, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain![win]);
-                        i++;
-                        requantized.push(rs);
-                    }
-                }
-            }
-            return requantized;
-        }
+        case "long": // sideinfo.block_type !== 2
+            return requantizeLongTill(sideinfo_gr_ch.preflag, sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 22);
+        case "short": // sideinfo.switch_point === 0
+            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
+            return requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 0);
         case "mixed": { // else (block_type === 2 && switch_point === 1)
-            // so complicate...
-
-            // till even point 36, requantize as long. but not preflag.
-            const scalefac_l = maindata_gr_ch.scalefac.scalefac_l.slice(0, 8);
-            // process for easily zipped with "is"
-            const scalefac_l_i = subbands_long_lengths[sampfreq].slice(0, 8).flatMap((len, i) => Array(len).fill(scalefac_l[i])) as number[];
-            // XXX: we should only do 0...zero_part_begin for speed optimization.
-            const long_requantized = is.slice(0, 36).map((rawsample, i) => {
-                return requantizeSample(rawsample, scale_step, scalefac_l_i[i], 0, sideinfo_gr_ch.global_gain, 0);
-            });
-
-            // from even point 36, requantize as short.
-            const band_len = subbands_short_lengths[sampfreq];
-            const scalefac_s = maindata_gr_ch.scalefac.scalefac_s;
-            // XXX: we should only do 0...zero_part_begin for speed optimization.
-            const short_requantized = [];
-            let i = 36; // from sample 36
-            for (const band of range(3, 12)) { // start from short band 3
-                for (const win of times(3)) {
-                    for (const band_i of times(band_len[band])) {
-                        const rawsample = is[i];
-                        // if block_type==2 then block_split_flag==1 and there is subblock_gain.
-                        const rs = requantizeSample(rawsample, scale_step, scalefac_s[band][win], 0, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain![win]);
-                        i++;
-                        short_requantized.push(rs);
-                    }
-                }
-            }
+            // till even point 36 = long_scalefactor_indices[8], requantize as long. but preflag is always 0 (even if preflag=1, pretab till [8] is 0).
+            const long_requantized = requantizeLongTill(0, sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 8);
+            // from even point 36 = short_scalefactor_indices[3], requantize as short.
+            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
+            const short_requantized = requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 3);
             return long_requantized.concat(short_requantized);
         }
         // default:
