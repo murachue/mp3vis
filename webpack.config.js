@@ -1,5 +1,14 @@
 module.exports = {
-    mode: "development",
+    // mode: "development",
+    // optimization: {
+    //     usedExports: true,
+    //     concatenateModules: true,
+    //     providedExports: true,
+    // },
+    mode: "production",
+    optimization: {
+        minimize: false,
+    },
     entry: "./mp3vis.ts",
     module: {
         rules: [
@@ -14,9 +23,6 @@ module.exports = {
             ".ts",
         ],
     },
-    // optimization: {
-    //     usedExports: true,
-    // },
     devtool: "inline-source-map",
     output: {
         filename: "mp3vis.js",
