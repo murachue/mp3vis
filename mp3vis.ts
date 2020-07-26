@@ -1343,7 +1343,7 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
 
         v_vec_q: { channel: v_vec_q_chs },
     };
-};
+}
 
 function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: FrameType, maindata: MaindataType) {
     // requantize, reorder and stereo, in "scalefactor band" world...
