@@ -21,7 +21,8 @@
 		drag here
 		<p id="info">info shown here</p>
 		<canvas id="wavescope" style="width: 100%; height: 100px;"></canvas>
-		<a id="dlsample">download raw sample</a>
+		<p><a id="dlsample">download raw sample</a></p>
+		<p><a id="playsample">play sample</a></p>
 	</div>
 	<script src="mp3vis.js"></script>
 	<script>
@@ -30,7 +31,7 @@
 
 			document.getElementById("info").innerText = `${frames.length} / ${maindatas.length}`;
 
-			const samples = Array(soundframes[0].size).fill(0).map((_, ch) => soundframes.flatMap(sf => sf[ch]));
+			const samples = Array(soundframes[0].length).fill(0).map((_, ch) => soundframes.flatMap(sf => sf[ch]));
 
 			const canvas = document.getElementById("wavescope");
 			const ctx = canvas.getContext("2d");
@@ -50,11 +51,28 @@
 
 			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => [samples[0][i] * 32767, samples[1][i] * 32767]));
 			const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
-			const a = document.getElementById("dlsample");
-			if (a.href) {
-				URL.revokeObjectURL(a.href);
+			const a_dl = document.getElementById("dlsample");
+			if (a_dl.href) {
+				URL.revokeObjectURL(a_dl.href);
 			}
-			a.href = url;
+			a_dl.href = url;
+
+			const a_play = document.getElementById("playsample");
+			a_play.href = "#";
+			a_play.onclick = function () {
+				const ctx = new AudioContext();
+				const buf = ctx.createBuffer(samples.length, samples[0].length, [44100, 48000, 32000, null][frames[0].header.sampling_frequency]);
+				Array(samples.length).fill(0).forEach((_, ch) => {
+					const chbuf = buf.getChannelData(ch);
+					samples[ch].forEach((e, i) => {
+						chbuf[i] = e;
+					});
+				});
+				const src = ctx.createBufferSource();
+				src.buffer = buf;
+				src.connect(ctx.destination);
+				src.start();
+			};
 		}
 		const it = document.getElementById("dropbox");
 		it.addEventListener("dragover", (e) => {
