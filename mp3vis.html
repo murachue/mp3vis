@@ -30,7 +30,7 @@
 
 			document.getElementById("info").innerText = `${frames.length} / ${maindatas.length}`;
 
-			const samples = [0, 1].map(ch => soundframes.flatMap(sf => sf[ch]));
+			const samples = Array(soundframes[0].size).fill(0).map((_, ch) => soundframes.flatMap(sf => sf[ch]));
 
 			const canvas = document.getElementById("wavescope");
 			const ctx = canvas.getContext("2d");
@@ -38,7 +38,7 @@
 			canvas.height = 100;
 			ctx.fillStyle = "#222";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			for (const param of [{ color: "#cfc", sample: samples[0] }, { color: "#ccf", sample: samples[1] }]) {
+			for (const param of [{ color: "#cfc", sample: samples[0] }, { color: "#ccf", sample: samples[1] }].slice(0, samples.length)) {
 				ctx.strokeStyle = param.color;
 				ctx.beginPath();
 				ctx.moveTo(0, param.sample[0] * 50 + 50);
