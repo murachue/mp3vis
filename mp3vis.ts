@@ -243,6 +243,16 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
     };
 }
 
+const sampling_frequencies = [44100, 48000, 32000] as const; // [3] is reserved.
+// TODO: how to measure framebytes in free-format? try to read next sync and then read?? difficult on buffering...
+function frame_bytes(header: PromiseType<ReturnType<typeof readheader>>) {
+    const bitrate_kbps = layer3_bitrate_kbps[header.bitrate_index - 1];
+    const sampfreq = sampling_frequencies[header.sampling_frequency];
+    // from Lagerstrom MP3 Thesis. also in ISO 11172-3 2.4.3.1.
+    return Math.floor(144 * bitrate_kbps * 1000 / sampfreq) + header.padding_bit;
+}
+
+const layer3_bitrate_kbps = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
 async function readframe(r: U8BitReader) {
     const offset = r.tell() / 8;
     const header = await readheader(r);
@@ -257,11 +267,7 @@ async function readframe(r: U8BitReader) {
         throw new Error("free-format not supported yet");
     }
     const headbytes = r.tell() / 8 - offset;
-    const l3bitratekbps = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320][header.bitrate_index - 1];
-    const sampfreq = [44100, 48000, 32000][header.sampling_frequency];
-    // TODO: how to measure framebytes in free-format? try to read next sync and then read?? difficult on buffering...
-    // const framebytes = sampfreq/1152/* 2granules */;
-    const framebytes = Math.floor(144 * l3bitratekbps * 1000 / sampfreq) + header.padding_bit; // from Lagerstrom MP3 Thesis. also in ISO 11172-3 2.4.3.1.
+    const framebytes = frame_bytes(header);
     const data = await r.readbytes(framebytes - headbytes);
     // TODO: crc_check
     return {
@@ -283,34 +289,16 @@ function concat<T extends Uint8Array>(a: T, b: T) {
     return x;
 }
 
-function rindex<T>(arr: T[], pred: (el: T) => boolean): number | null {
-    for (let i = arr.length - 1; 0 <= i; i--) {
-        if (pred(arr[i])) {
-            return i;
-        }
-    }
-    return null;
-}
-
-// split test and concat, and test before concat to prepare prevframes become longer.
-// (in spec it does not exceeds 2 but more frames in the wild...)
 // note: this will return more than enough on tail.
 function get_main_data(prevframes: FrameType[], frame: FrameType) {
-    const reservoir_accumlens = prevframes.reduceRight((prev, cur) => [(prev[0] || 0) + cur.data.length, ...prev], [] as number[]);
-    const main_data_end = frame.sideinfo.main_data_end;
-    const reservoir_len = reservoir_accumlens[0] || 0;
-    if (reservoir_len < main_data_end) {
+    // ugly but can't flatMap to Uint8Array...
+    const reservoir = prevframes.map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
+    if (reservoir.length < frame.sideinfo.main_data_end) {
         // not enough reservoir (started in middle of stream?), can't decode
         return null;
     }
 
-    const from = rindex(reservoir_accumlens, accumlen => main_data_end <= accumlen) || 0;
-
-    // ugly but can't flatMap to Uint8Array...
-    const reservoir = prevframes.slice(from).map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
-    // explicit (non-negative) start covers main_data_end===0 case.
-    const leaddata = reservoir.slice(reservoir.length - main_data_end);
-    return concat(leaddata, frame.data);
+    return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
 }
 
 // note: they are actually "T=[T,T]|[number,number]" but such union-recursive type tortures typescript compiler...
@@ -454,7 +442,7 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     // mp3decoder(haskell) completely ignores block_split_flag.
     // but also region_start* are set (const) even when block_type==2??
     const is_shortblock = (sideinfo.block_type == 2 && sideinfo.block_split_flag);
-    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
+    const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
     // note: all long[8] is 36.
@@ -771,7 +759,7 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
 }
 function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
     const scale_step = sideinfo_gr_ch.scalefac_scale ? 1 : 0.5; // 0=sqrt2 1=2
-    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency];
+    const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const is = maindata_gr_ch.is.is;
 
     switch (maindata_gr_ch.scalefac.type) {
@@ -840,7 +828,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
             //      where a,b,c are each window's.
             // XXX: we should only do ...zero_part_begin for speed optimization.
             // do not touch for long area (long_band[<8] = short_band[<3] = samples[<36]) if switch_point.
-            const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+            const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
             const band_short_indices = scalefactor_band_indices[sampfreq].short;
             const band_short_lengths = subbands_short_lengths[sampfreq];
             const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
@@ -883,7 +871,7 @@ function intensityRatio(scalefac: number) {
 }
 
 function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], till: number) {
-    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+    const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
     for (const band of times(till)) {
@@ -924,7 +912,7 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
 // note: return is from "from", not from "0", to make easier to concat() later.
 // note: Lagerstrom MP3 Thesis's intensity stereo short code has a bug: not multiplying but just assigned...
 function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], from: number) {
-    const sampfreq = ([44100, 48000, 32000] as const)[frame.header.sampling_frequency]; // all are same if [0] or [3].
+    const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
     for (const band of range(from, 12)) {
@@ -1400,9 +1388,11 @@ export async function parsefile(ab: ArrayBuffer) {
             const frame = await readframe(br);
             frames.push(frame);
             try {
-                // recent <del>2</del>many but not recent added current frames and current.
-                // XXX: in spec, at most 2 frames are reservoir, but in the wild, Little.mp3 have main_data pointing 3 frames before!
-                const framedata = await unpackframe(frames.slice(0, -1), frame);
+                // recent 2 frames and current... in spec.
+                // XXX: main_data pointing more than 2 frames ago in the wild. feed 511 bytes that is max-value of main_data_end.
+                // XXX: not supporting free-format yet...
+                const max_main_data_frames = Math.ceil(511 / frame_bytes(frame.header));
+                const framedata = await unpackframe(frames.slice(-max_main_data_frames - 1, -1), frame);
                 if (framedata) {
                     maindatas.push(framedata);
 
