@@ -672,7 +672,8 @@ type MaindataType = NonNullable<PromiseType<ReturnType<typeof unpackframe>>>;
 
 // pretab: "shortcut" to scalefactor. this can be used to make finally encoded scalefac smaller on higher freq band.
 // only for long blocks, in subbands.
-const pretab = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2];
+// note: concat'ing [0] for last beyond scalefactor_band.
+const pretab = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2].concat([0]);
 // some preps for pretab_i...
 const array_cons_diff = (arr: readonly number[]) => {
     const diff = arr.map((e, i) => arr[i + 1] - e);
