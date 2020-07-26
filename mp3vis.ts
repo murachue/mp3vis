@@ -1006,8 +1006,8 @@ function jointstereo(frame: FrameType, maindata: MaindataType, reordered: Return
 
 const antiAliasCoeffs = [-0.6, -0.535, -0.33, -0.185, -0.095, -0.041, -0.0142, -0.0037];
 // ??? magic!
-const antiAliasS = antiAliasCoeffs.map(coeff => 1 / Math.sqrt(1 + coeff * coeff));
-const antiAliasA = antiAliasCoeffs.map(coeff => coeff / Math.sqrt(1 + coeff * coeff));
+const antiAliasS = antiAliasCoeffs.map(coeff => 1 / Math.sqrt(1 + coeff * coeff)); // Signal?
+const antiAliasA = antiAliasCoeffs.map(coeff => coeff / Math.sqrt(1 + coeff * coeff)); // Alias?
 function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
@@ -1028,12 +1028,13 @@ function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
             const till_sb = (sideinfo.block_type === 2) ? 2 : 32; // if block_type===2 then switch_point===1.
             const work = [...samples.slice(0, 18 * till_sb)]; // copy
             // "butterfly calculations" from Lagerstrom MP3 Thesis.
+            // area overlaps, overwriting "work" is easier than functional style.
             for (const sb of range(1, till_sb)) {
                 for (const i of times(8)) {
                     const loweri = 18 * sb - 1 - i;
                     const upperi = 18 * sb + i;
                     const lowersamp = work[loweri] * antiAliasS[i] - work[upperi] * antiAliasA[i];
-                    const uppersamp = work[upperi] * antiAliasS[i] - work[loweri] * antiAliasA[i];
+                    const uppersamp = work[upperi] * antiAliasS[i] + work[loweri] * antiAliasA[i];
                     work[loweri] = lowersamp;
                     work[upperi] = uppersamp;
                 }
