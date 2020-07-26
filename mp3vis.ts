@@ -1159,7 +1159,7 @@ function freqinv(hybridsynthed: { granule: ReturnType<typeof hybridsynth>["granu
                 // for each odd 32[subbands] * 18[samples/subband], inverse value on odd-index.
                 // ex. sb[1][1,3,5,...,17], sb[3][1,3,5,...,17], ...
                 subband: ch.subband.map((sb, sb_i) =>
-                    sb.map((s, i) => ((sb_i & 2) === 1 && (i & 2) === 1) ? -s : s)
+                    sb.map((s, i) => ((sb_i % 2) === 1 && (i % 2) === 1) ? -s : s)
                 ),
             })),
         })),
