@@ -118,7 +118,7 @@ async function readheader(r: U8BitReader) {
         original,
         emphasis,
     };
-};
+}
 
 async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
     const is_mono = header.mode === 3;
@@ -241,7 +241,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
         private_bits,
         channel,
     };
-};
+}
 
 async function readframe(r: U8BitReader) {
     const offset = r.tell() / 8;
@@ -270,7 +270,7 @@ async function readframe(r: U8BitReader) {
         sideinfo,
         data, // not main_data that is reassembled.
     };
-};
+}
 
 type FrameType = PromiseType<ReturnType<typeof readframe>>;
 
@@ -1402,4 +1402,4 @@ export async function parsefile(ab: ArrayBuffer) {
         maindatas,
         soundframes,
     };
-};
+}
