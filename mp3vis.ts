@@ -758,7 +758,7 @@ function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, mai
             // process for easily zipped with "is"
             const scalefac_l_i = subbands_long_lengths[sampfreq].slice(0, 8).flatMap((len, i) => Array(len).fill(scalefac_l[i])) as number[];
             // XXX: we should only do 0...zero_part_begin for speed optimization.
-            const long_requantized = is.slice(36).map((rawsample, i) => {
+            const long_requantized = is.slice(0, 36).map((rawsample, i) => {
                 return requantizeSample(rawsample, scale_step, scalefac_l_i[i], 0, sideinfo_gr_ch.global_gain, 0);
             });
 
