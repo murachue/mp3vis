@@ -729,12 +729,14 @@ function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, sc
 // XXX: arguments are too complicated
 function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, subblock_gain: number[], scalefac_s: number[][], is: number[], from: number) {
     const band_len = subbands_short_lengths[sampfreq];
-    const scalefac = scalefac_s;
+    // padding 0 for scalefac_s.length==12 but subbands_short_lengths.length==13
+    // XXX: is it ensured that zero_part_begin does not exceeds short_band[12]==418/384/550??
+    const scalefac = scalefac_s.concat([[0, 0, 0]]);
 
     // XXX: we should only do 0...zero_part_begin for speed optimization.
     const requantized = [];
     let i = scalefactor_band_indices[sampfreq].short[from] * 3;
-    for (const band of range(from, 12)) {
+    for (const band of range(from, 13)) {
         for (const win of times(3)) {
             for (const band_i of times(band_len[band])) {
                 const rawsample = is[i];
