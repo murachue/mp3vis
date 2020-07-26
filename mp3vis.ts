@@ -1322,7 +1322,7 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
                 // matrixing. v_vec looks actually [2][32] but here [64] as concatenated...
                 const v_vec = times(64, i => times(32, j => s_vec[j] * synth_filter[i][j]).reduce((prev, cur) => prev + cur, 0));
 
-                v_vec_q_chs[ch] = [...v_vec_q_chs[ch].slice(1, 16), v_vec];
+                v_vec_q_chs[ch] = [v_vec, ...v_vec_q_chs[ch].slice(0, 15)];
 
                 // u_vec: constructed by pick each [0][0][0..31] and [1][1][0..31] in each [2].
                 // in current structure, it is [0][0..31] and [1][32..63].
