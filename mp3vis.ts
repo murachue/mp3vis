@@ -354,8 +354,9 @@ export const bigvalueHufftabs: readonly (null | readonly [readonly any[], number
     [bigvalueHufftab24, 13],
 ];
 
-// 0..21+end(long) and 0..12+end(short) subbands. used for region_address to subbands, and requantize.
+// 0..20+1+end(long) and 0..11+1+end(short) subbands. used for region_address to subbands, and requantize.
 // tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
+// tips: they have extra 1 band than each scalefactors...
 // TODO: this does not need to object.
 const scalefactor_band_indices = {
     44100: {
@@ -824,7 +825,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
             const band_short_lengths = subbands_short_lengths[sampfreq];
             const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
             const reordered = requantized_gr_ch.slice(0, band_short_indices[bandFrom]); // this is copy longs if switch_point, else just [].
-            for (const band of range(bandFrom, 12)) {
+            for (const band of range(bandFrom, 13)) {
                 const len = band_short_lengths[band];
                 for (const i of times(len)) {
                     for (const window of times(3)) {
