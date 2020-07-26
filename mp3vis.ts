@@ -1311,10 +1311,10 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
     const prev_v_vec_q = raw_prev_v_vec_q || { channel: times(2, _ => times(16, _ => Array(64).fill(0))) };
     const v_vec_q_chs = [...prev_v_vec_q.channel];
     const channel: number[][] = [];
-    times(nchans, ch => {
+    for (const ch of times(nchans)) {
         const gr_out: number[] = [];
-        times(2, gr => {
-            times(18, ss => { // Subband Sample
+        for (const gr of times(2)) {
+            for (const ss of times(18)) { // Subband Sample
                 // yes, collect each subband's sample[ss]. seems odd.
                 const s_vec = times(32, i => freqinved.granule[gr].channel[ch].subband[i][ss]);
                 // matrixing. v_vec looks actually [2][32] but here [64] as concatenated...
@@ -1332,10 +1332,10 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
                 // get final samples by sum by columnar
                 const out = times(32, i => times(16, j => w_vec[j * 32 + i]).reduce((prev, cur) => prev + cur, 0));
                 gr_out.push(...out);
-            });
-        });
+            }
+        }
         channel.push(gr_out);
-    });
+    }
 
     return {
         channel,
