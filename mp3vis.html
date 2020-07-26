@@ -21,34 +21,40 @@
 		drag here
 		<p id="info">info shown here</p>
 		<canvas id="wavescope" style="width: 100%; height: 100px;"></canvas>
+		<a id="dlsample">download raw sample</a>
 	</div>
 	<script src="mp3vis.js"></script>
 	<script>
 		async function parse(ab) {
 			const { frames, maindatas, soundframes } = await Mp3vis.parsefile(ab);
+
 			document.getElementById("info").innerText = `${frames.length} / ${maindatas.length}`;
+
+			const samples = [0, 1].map(ch => soundframes.flatMap(sf => sf[ch]));
+
 			const canvas = document.getElementById("wavescope");
 			const ctx = canvas.getContext("2d");
-			const samples = [0, 1].map(ch => soundframes.flatMap(sf => sf[ch]));
-			const samp0 = samples[0];
-			const samplen = samp0.length
-			canvas.width = samplen;
+			canvas.width = samples[0].length;
 			canvas.height = 100;
 			ctx.fillStyle = "#222";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			ctx.strokeStyle = "#cfc";
-			// for (let i = 0; i < samplen - 1; i++) {
-			// 	ctx.beginPath();
-			// 	ctx.moveTo(i, samp0[i] * 50 + 50);
-			// 	ctx.lineTo(i + 1, samp0[i + 1] * 50 + 50);
-			// 	ctx.stroke();
-			// }
-			ctx.beginPath();
-			ctx.moveTo(0, samp0[0] * 50 + 50);
-			samp0.forEach((v, i) => {
-				ctx.lineTo(i, v * 50 + 50)
-			});
-			ctx.stroke();
+			for (const param of [{ color: "#cfc", sample: samples[0] }, { color: "#ccf", sample: samples[1] }]) {
+				ctx.strokeStyle = param.color;
+				ctx.beginPath();
+				ctx.moveTo(0, param.sample[0] * 50 + 50);
+				param.sample.forEach((v, i) => {
+					ctx.lineTo(i, v * 50 + 50)
+				});
+				ctx.stroke();
+			}
+
+			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => [samples[0][i] * 32767, samples[1][i] * 32767]));
+			const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
+			const a = document.getElementById("dlsample");
+			if (a.href) {
+				URL.revokeObjectURL(a.href);
+			}
+			a.href = url;
 		}
 		const it = document.getElementById("dropbox");
 		it.addEventListener("dragover", (e) => {
