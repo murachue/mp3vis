@@ -263,6 +263,7 @@ async function readframe(r: U8BitReader) {
     // const framebytes = sampfreq/1152/* 2granules */;
     const framebytes = Math.floor(144 * l3bitratekbps * 1000 / sampfreq) + header.padding_bit; // from Lagerstrom MP3 Thesis. also in ISO 11172-3 2.4.3.1.
     const data = await r.readbytes(framebytes - headbytes);
+    // TODO: crc_check
     return {
         offset,
         header,
@@ -282,16 +283,34 @@ function concat<T extends Uint8Array>(a: T, b: T) {
     return x;
 }
 
+function rindex<T>(arr: T[], pred: (el: T) => boolean): number | null {
+    for (let i = arr.length - 1; 0 <= i; i--) {
+        if (pred(arr[i])) {
+            return i;
+        }
+    }
+    return null;
+}
+
+// split test and concat, and test before concat to prepare prevframes become longer.
+// (in spec it does not exceeds 2 but more frames in the wild...)
 // note: this will return more than enough on tail.
 function get_main_data(prevframes: FrameType[], frame: FrameType) {
-    // ugly but can't flatMap to Uint8Array...
-    const reservoir = prevframes.map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
-    if (reservoir.length < frame.sideinfo.main_data_end) {
+    const reservoir_accumlens = prevframes.reduceRight((prev, cur) => [(prev[0] || 0) + cur.data.length, ...prev], [] as number[]);
+    const main_data_end = frame.sideinfo.main_data_end;
+    const reservoir_len = reservoir_accumlens[0] || 0;
+    if (reservoir_len < main_data_end) {
         // not enough reservoir (started in middle of stream?), can't decode
         return null;
     }
 
-    return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
+    const from = rindex(reservoir_accumlens, accumlen => main_data_end <= accumlen) || 0;
+
+    // ugly but can't flatMap to Uint8Array...
+    const reservoir = prevframes.slice(from).map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
+    // explicit (non-negative) start covers main_data_end===0 case.
+    const leaddata = reservoir.slice(reservoir.length - main_data_end);
+    return concat(leaddata, frame.data);
 }
 
 // note: they are actually "T=[T,T]|[number,number]" but such union-recursive type tortures typescript compiler...
@@ -1381,7 +1400,9 @@ export async function parsefile(ab: ArrayBuffer) {
             const frame = await readframe(br);
             frames.push(frame);
             try {
-                const framedata = await unpackframe(frames.slice(-3, -1), frame); // recent 2 frames and current.
+                // recent <del>2</del>many but not recent added current frames and current.
+                // XXX: in spec, at most 2 frames are reservoir, but in the wild, Little.mp3 have main_data pointing 3 frames before!
+                const framedata = await unpackframe(frames.slice(0, -1), frame);
                 if (framedata) {
                     maindatas.push(framedata);
 
