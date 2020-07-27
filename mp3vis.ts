@@ -994,6 +994,11 @@ function jointstereo(frame: FrameType, maindata: MaindataType, reordered: Return
                 ms[0].push((processed[0][i] + processed[1][i]) * inv_sqrt2);
                 ms[1].push((processed[0][i] - processed[1][i]) * inv_sqrt2);
             }
+            // copy tail as is.
+            for (const i of range(max_pos, 576)) {
+                ms[0].push(processed[0][i]);
+                ms[1].push(processed[1][i]);
+            }
             processed = ms;
         }
 
