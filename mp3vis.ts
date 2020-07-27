@@ -1072,9 +1072,9 @@ const imdct_windows = [
     times(36).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
     // block_type 1: start long block
     ([] as number[]).concat(
-        times(18).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
+        range(0, 18).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
         Array(24 - 18).fill(1),
-        times(30 - 24).map(i => Math.sin(Math.PI / 12 * (i - 18 + 0.5))),
+        range(24, 30).map(i => Math.sin(Math.PI / 12 * (i - 18 + 0.5))),
         Array(36 - 30).fill(0),
     ),
     // block_type 2: 3 short block (only 12 elements)
@@ -1082,9 +1082,9 @@ const imdct_windows = [
     // block_type 3: end long block
     ([] as number[]).concat(
         Array(6).fill(0),
-        times(12 - 6).map(i => Math.sin(Math.PI / 12 * (i - 6 + 0.5))),
+        range(6, 12).map(i => Math.sin(Math.PI / 12 * (i - 6 + 0.5))),
         Array(18 - 12).fill(1),
-        times(36 - 18).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
+        range(18, 36).map(i => Math.sin(Math.PI / 36 * (i + 0.5))),
     ),
 ];
 
@@ -1125,11 +1125,11 @@ function hybridsynth(frame: FrameType, rawprevtail: SubbandsType | null, antiali
         const tail_ch = [];
         for (const ch of times(nchans)) {
             const samples = antialiased.granule[gr].channel[ch];
+            const sideinfo = frame.sideinfo.channel[ch].granule[gr];
+            const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
             const subband: NonNullable<SubbandsType>["channel"][number]["subband"] = [];
             const tail_sb = [];
             for (const sb of times(32)) {
-                const sideinfo = frame.sideinfo.channel[ch].granule[gr];
-                const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
                 // fake block_type=0(normal) if mixed_block and sb < 2 (even-point in subbands).
                 // technique taken from Lagerstrom MP3 Thesis.
                 const btype = (is_mixed_block && sb < 2) ? 0 : sideinfo.block_type;
