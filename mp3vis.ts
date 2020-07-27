@@ -1391,9 +1391,19 @@ export async function parsefile(ab: ArrayBuffer) {
             try {
                 // recent 2 frames and current... in spec.
                 // XXX: main_data pointing more than 2 frames ago in the wild. feed 511 bytes that is max-value of main_data_end.
+                //      we cannot (511 / (frame_bytes(frame.header) - 4 - 31)) because of VBR.
                 // XXX: not supporting free-format yet...
-                const max_main_data_frames = Math.ceil(511 / frame_bytes(frame.header));
-                const framedata = await unpackframe(frames.slice(-max_main_data_frames - 1, -1), frame);
+                const prevFrames = [];
+                let prevFrameMainDataLen = 0;
+                // [frames.length - 1] = last = just appended. exclude it...
+                for (let i = frames.length - 2; 0 <= i; i--) {
+                    prevFrames.unshift(frames[i]);
+                    prevFrameMainDataLen += frames[i].data.length;
+                    if (511 <= prevFrameMainDataLen) {
+                        break;
+                    }
+                }
+                const framedata = await unpackframe(prevFrames, frame);
                 if (framedata) {
                     maindatas.push(framedata);
 
