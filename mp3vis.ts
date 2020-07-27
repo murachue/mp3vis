@@ -298,7 +298,8 @@ function get_main_data(prevframes: FrameType[], frame: FrameType) {
         return null;
     }
 
-    return concat(reservoir.slice(-frame.sideinfo.main_data_end), frame.data);
+    // explicitly (non-negative) start also handles main_data_end===0.
+    return concat(reservoir.slice(reservoir.length - frame.sideinfo.main_data_end), frame.data);
 }
 
 // note: they are actually "T=[T,T]|[number,number]" but such union-recursive type tortures typescript compiler...
