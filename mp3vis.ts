@@ -594,12 +594,15 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                     // long-window
                     // slen1 for 0..10, slen2 for 11..20
                     // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
-                    const scalefac_l: number[] = [];
-                    await [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]].reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
-                        await prev;
+                    // const scalefac_l: number[] = [];
+                    const band_groups = [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]];
+                    // note: we want flatMap but order of reading bits is strictly important. we must use reduce to ensure it.
+                    const scalefac_l = await band_groups.reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
+                        const scalefacs = await prev;
                         for (const band of range(sfrbeg, sfrend + 1)) {
                             if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
-                                scalefac_l[band] = await r.readbits(slen);
+                                const sf = await r.readbits(slen);
+                                scalefacs.push(sf); // scalefac_l[band] = sf;
                             } else {
                                 // copy from granule 0 if gr===1 && scfsi===1
                                 if (sideinfo.block_type === 2) {
@@ -613,11 +616,30 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                                 // const scalefac_l_gr0 = scalefac_gr0.scalefac_l;
                                 // scalefac_l[band] = scalefac_l_gr0[band];
 
-                                // fill it later
-                                scalefac_l[band] = 0;
+                                // fill it later; use NaN to make more disaster when failed (not "broken-a-bit") to easy bug detection, but satisfy number type.
+                                scalefacs.push(0 / 0); // scalefac_l[band] = 0/0;
                             }
                         }
-                    }, Promise.resolve());
+                        return scalefacs;
+                    }, Promise.resolve([] as number[]));
+
+                    // copy scalefac if scfsi. don't do this in above loop to allow tsc type derive for "granule" succeed.
+                    if (gr === 1) {
+                        for (const group in band_groups) {
+                            if (!frame.sideinfo.channel[ch].scfsi[group]) {
+                                break;
+                            }
+                            const scalefac_gr0_ch = granule[0].channel[ch].scalefac;
+                            if (scalefac_gr0_ch.type !== "long") {
+                                throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
+                            }
+                            const [sfrbegin, sfrend, _slen] = band_groups[group];
+                            for (const band of range(sfrbegin, sfrend + 1)) {
+                                scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
+                            }
+                            }
+                        }
+
                     return {
                         type: "long",
                         scalefac_l,
@@ -637,28 +659,6 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
             });
         }
         granule.push({ channel });
-    }
-
-    // copy scalefac if scfsi
-    const band_groups = [[0, 5], [6, 10], [11, 15], [16, 20]];
-    for (const ch of times(nchans)) {
-        for (const group in band_groups) {
-            if (!frame.sideinfo.channel[ch].scfsi[group]) {
-                break;
-            }
-            const scalefac_gr0_ch = granule[0].channel[ch].scalefac;
-            if (scalefac_gr0_ch.type !== "long") {
-                throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
-            }
-            const scalefac_gr1_ch = granule[1].channel[ch].scalefac;
-            if (scalefac_gr1_ch.type !== "long") {
-                throw new Error(`scfsi but gr1 not long: ${scalefac_gr1_ch.type}`);
-            }
-            const [sfrbegin, sfrend] = band_groups[group];
-            for (const band of range(sfrbegin, sfrend)) {
-                scalefac_gr1_ch.scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
-            }
-        }
     }
 
     const ancillary_nbits = (8 - r.tell() % 8) % 8;
