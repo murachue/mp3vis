@@ -627,7 +627,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                     if (gr === 1) {
                         for (const group in band_groups) {
                             if (!frame.sideinfo.channel[ch].scfsi[group]) {
-                                break;
+                                continue;
                             }
                             const scalefac_gr0_ch = granule[0].channel[ch].scalefac;
                             if (scalefac_gr0_ch.type !== "long") {
