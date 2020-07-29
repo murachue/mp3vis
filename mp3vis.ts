@@ -637,8 +637,8 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                             for (const band of range(sfrbegin, sfrend + 1)) {
                                 scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
                             }
-                            }
                         }
+                    }
 
                     return {
                         type: "long",
@@ -1378,6 +1378,8 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
         // last granule to feed into next hybridsynth, it must be before freqinved (in decode).
         lastHybridTail: hysynthed_timedom.prevtail,
         v_vec_q: sbsynthed.v_vec_q,
+
+        internal: { requantized, reordered, stereoed, antialiased, hysynthed_timedom, freqinved, sbsynthed, },
     };
 }
 
@@ -1386,6 +1388,7 @@ export async function parsefile(ab: ArrayBuffer) {
     const frames = [];
     const maindatas = [];
     const soundframes = [];
+    const internals = [];
     let prevHybridTail: SubbandsType | null = null;
     let prevVVecQ: VVecQType | null = null;
     while (!br.eof()) {
@@ -1412,10 +1415,11 @@ export async function parsefile(ab: ArrayBuffer) {
                 if (framedata) {
                     maindatas.push(framedata);
 
-                    const { channel: sound, lastHybridTail, v_vec_q } = decodeframe(prevVVecQ, prevHybridTail, frame, framedata);
+                    const { channel: sound, lastHybridTail, v_vec_q, internal } = decodeframe(prevVVecQ, prevHybridTail, frame, framedata);
                     prevHybridTail = lastHybridTail;
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
+                    internals.push(internal);
                 }
             } catch{
                 // ignore for main_data decoding
@@ -1429,5 +1433,6 @@ export async function parsefile(ab: ArrayBuffer) {
         frames,
         maindatas,
         soundframes,
+        internals,
     };
 }
