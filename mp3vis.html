@@ -59,13 +59,19 @@
 			}
 			*/
 
-			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => samples.map(ch => Math.min(Math.max(ch[i], -1), 1) * 32767)));
-			const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
 			const a_dl = document.getElementById("dlsample");
-			if (a_dl.href) {
-				URL.revokeObjectURL(a_dl.href);
+			a_dl.href = "#";
+			a_dl.onclick = function () {
+				const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => samples.map(ch => Math.min(Math.max(ch[i], -1), 1) * 32767)));
+				const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
+				const tmpa = document.createElement("a");
+				document.body.appendChild(tmpa);
+				tmpa.style = "display: none;";
+				tmpa.href = url;
+				tmpa.click();
+				document.body.removeChild(tmpa);
+				URL.revokeObjectURL(url);
 			}
-			a_dl.href = url;
 
 			const a_play = document.getElementById("playsample");
 			a_play.href = "#";
