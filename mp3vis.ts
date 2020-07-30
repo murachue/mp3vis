@@ -326,41 +326,40 @@ const count1Hufftabs = [
     count1Hufftab1,
 ];
 
-// null | [tab, linbits]
-const bigvalueHufftabs: readonly (null | readonly [readonly any[], number])[] = [
-    null,
-    [bigvalueHufftab1, 0],
-    [bigvalueHufftab2, 0],
-    [bigvalueHufftab3, 0],
-    null,
-    [bigvalueHufftab5, 0],
-    [bigvalueHufftab6, 0],
-    [bigvalueHufftab7, 0],
-    [bigvalueHufftab8, 0],
-    [bigvalueHufftab9, 0],
-    [bigvalueHufftab10, 0],
-    [bigvalueHufftab11, 0],
-    [bigvalueHufftab12, 0],
-    [bigvalueHufftab13, 0],
-    null,
-    [bigvalueHufftab15, 0],
-    [bigvalueHufftab16, 1],
-    [bigvalueHufftab16, 2],
-    [bigvalueHufftab16, 3],
-    [bigvalueHufftab16, 4],
-    [bigvalueHufftab16, 6],
-    [bigvalueHufftab16, 8],
-    [bigvalueHufftab16, 10],
-    [bigvalueHufftab16, 13],
-    [bigvalueHufftab24, 4],
-    [bigvalueHufftab24, 5],
-    [bigvalueHufftab24, 6],
-    [bigvalueHufftab24, 7],
-    [bigvalueHufftab24, 8],
-    [bigvalueHufftab24, 9],
-    [bigvalueHufftab24, 11],
-    [bigvalueHufftab24, 13],
-];
+const bigvalueHufftabs = [
+    { table: null },
+    { table: bigvalueHufftab1, linbits: 0 },
+    { table: bigvalueHufftab2, linbits: 0 },
+    { table: bigvalueHufftab3, linbits: 0 },
+    { table: null },
+    { table: bigvalueHufftab5, linbits: 0 },
+    { table: bigvalueHufftab6, linbits: 0 },
+    { table: bigvalueHufftab7, linbits: 0 },
+    { table: bigvalueHufftab8, linbits: 0 },
+    { table: bigvalueHufftab9, linbits: 0 },
+    { table: bigvalueHufftab10, linbits: 0 },
+    { table: bigvalueHufftab11, linbits: 0 },
+    { table: bigvalueHufftab12, linbits: 0 },
+    { table: bigvalueHufftab13, linbits: 0 },
+    { table: null },
+    { table: bigvalueHufftab15, linbits: 0 },
+    { table: bigvalueHufftab16, linbits: 1 },
+    { table: bigvalueHufftab16, linbits: 2 },
+    { table: bigvalueHufftab16, linbits: 3 },
+    { table: bigvalueHufftab16, linbits: 4 },
+    { table: bigvalueHufftab16, linbits: 6 },
+    { table: bigvalueHufftab16, linbits: 8 },
+    { table: bigvalueHufftab16, linbits: 10 },
+    { table: bigvalueHufftab16, linbits: 13 },
+    { table: bigvalueHufftab24, linbits: 4 },
+    { table: bigvalueHufftab24, linbits: 5 },
+    { table: bigvalueHufftab24, linbits: 6 },
+    { table: bigvalueHufftab24, linbits: 7 },
+    { table: bigvalueHufftab24, linbits: 8 },
+    { table: bigvalueHufftab24, linbits: 9 },
+    { table: bigvalueHufftab24, linbits: 11 },
+    { table: bigvalueHufftab24, linbits: 13 },
+] as const;
 
 // 0..20+1+end(long) and 0..11+1+end(short) subbands. used for region_address to subbands, and requantize.
 // tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
@@ -406,10 +405,15 @@ async function readlinsign(r: U8BitReader, linbits: number, rawx: number) {
     }
 }
 
-async function readhuffbig(r: U8BitReader, tab: readonly any[], linbits: number) {
-    const [rawx, rawy] = await readhuffsymbol(r, tab);
-    const x = await readlinsign(r, linbits, rawx);
-    const y = await readlinsign(r, linbits, rawy);
+async function readhuffbig(r: U8BitReader, tab: typeof bigvalueHufftabs[number]) {
+    // note: null table is also valid...
+    if (!tab.table) {
+        return [0, 0];
+    }
+
+    const [rawx, rawy] = await readhuffsymbol(r, tab.table);
+    const x = await readlinsign(r, tab.linbits, rawx);
+    const y = await readlinsign(r, tab.linbits, rawy);
     return [x, y];
 }
 
@@ -447,11 +451,12 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
     // note: all long[8] is 36.
-    const rawregion1start = is_shortblock ? scalefactor_band_indices[sampfreq].long[8] : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + 1];
+    const rawregion1start = scalefactor_band_indices[sampfreq].long[is_shortblock ? 8 : (sideinfo.region_address1 + 1)];
     const region1start = Math.min(bigvalues, rawregion1start); // region1start also may overruns
-    // rawregion2start naturally overruns to indicate "no region2"
+    // note: rawregion2start naturally overruns to indicate "no region2"
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
-    const rawregion2start = is_shortblock ? 576/*long[22]*/ : scalefactor_band_indices[sampfreq].long[sideinfo.region_address1 + sideinfo.region_address2 + 2];
+    // note: all long[22] is 576.
+    const rawregion2start = scalefactor_band_indices[sampfreq].long[is_shortblock ? 22 : (sideinfo.region_address1 + sideinfo.region_address2 + 2)];
     const region2start = Math.min(bigvalues, rawregion2start);
 
     const regionlens = [
@@ -475,11 +480,8 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
             continue;
         }
         const hufftab = bigvalueHufftabs[sideinfo.table_select[region]];
-        if (!hufftab) {
-            throw new Error(`region${region} references bad table: ${sideinfo.table_select[region]}`);
-        }
         for (const _ of times(regionlen / 2)) { // they are raw "is" count... here reads by 2.
-            is.push(...await readhuffbig(r, hufftab[0], hufftab[1]));
+            is.push(...await readhuffbig(r, hufftab));
         }
     }
 
@@ -496,10 +498,11 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
         is.push(...await readhuffcount1(r, hufftab));
     }
 
-    const part3read = r.tell() - part3_start;
-    if (part3_length < part3read) {
-        throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
-    }
+    // it may overruns... ex. GOGO no coder.
+    // const part3read = r.tell() - part3_start;
+    // if (part3_length < part3read) {
+    //     throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
+    // }
     if (576 < is.length) {
         throw new Error(`is exceeds 576: ${is.length}`);
     }
