@@ -35,6 +35,7 @@
 			const samples = Array(soundframes[0].length).fill(0).map((_, ch) => soundframes.flatMap(sf => sf[ch]));
 
 			const canvas = document.getElementById("wavescope");
+			/*
 			const ctx = canvas.getContext("2d");
 			canvas.width = samples[0].length;
 			canvas.height = 100;
@@ -49,6 +50,7 @@
 				});
 				ctx.stroke();
 			}
+			*/
 
 			const s16pcm = new Int16Array(Array(samples[0].length).fill(0).flatMap((_, i) => samples.map(ch => Math.min(Math.max(ch[i], -1), 1) * 32767)));
 			const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
