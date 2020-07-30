@@ -1383,7 +1383,7 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     };
 }
 
-export async function parsefile(ab: ArrayBuffer, rawBandmask: boolean[] | null = null) {
+export async function parsefile(ab: ArrayBuffer, callback: (iter: object) => Promise<void> = async () => { }, rawBandmask: boolean[] | null = null) {
     const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
@@ -1421,9 +1421,14 @@ export async function parsefile(ab: ArrayBuffer, rawBandmask: boolean[] | null =
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
                     internals.push(internal);
+                    await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal: internals });
+                } else {
+                    await callback({ i: frames.length, frame });
                 }
             } catch{
                 // ignore for main_data decoding
+
+                await callback({ i: frames.length, frame });
             }
         } catch {
             // try next byte, synchronizing to byte
