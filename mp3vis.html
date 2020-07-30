@@ -21,6 +21,7 @@
 		drag here
 		<p id="info">info shown here</p>
 		<canvas id="wavescope" style="width: 100%; height: 100px;"></canvas>
+		<p id="bandmasks"></p>
 		<p><a id="dlsample">download raw sample</a></p>
 		<p><a id="playsample">play sample</a></p>
 		<p id="internals" style="overflow: hidden; height: 3.5em;"></p>
@@ -28,7 +29,8 @@
 	<script src="mp3vis.js"></script>
 	<script>
 		async function parse(ab) {
-			const { frames, maindatas, soundframes, internals } = await Mp3vis.parsefile(ab);
+			const bandmask = Array(32).fill(0).map((_, i) => document.getElementById(`bandmask${i}`).checked);
+			const { frames, maindatas, soundframes, internals } = await Mp3vis.parsefile(ab, bandmask);
 
 			document.getElementById("info").innerText = `${frames.length} / ${maindatas.length}`;
 
@@ -98,6 +100,27 @@
 				file.arrayBuffer().then(parse);
 			}
 		});
+		{
+			const it = document.getElementById("bandmasks");
+			let prev = null;
+			Array(32).fill(0).forEach((_, i) => {
+				const chk = document.createElement("input");
+				chk.id = `bandmask${i}`;
+				chk.type = "checkbox";
+				chk.checked = true;
+				chk.onclick = function (ev) { // onchange cannot read event.shiftKey
+					if (prev !== null && ev.shiftKey) {
+						const from = Math.min(prev, i);
+						const to = Math.max(prev, i);
+						Array(to - from + 1).fill(0).forEach((_, x) => {
+							document.getElementById(`bandmask${from + x}`).checked = this.checked;
+						});
+					}
+					prev = i;
+				}
+				it.appendChild(chk);
+			});
+		}
 		/* fetch("ah.mp3").then((r) => {
 			if (r.ok) {
 				r.arrayBuffer().then(parse);

@@ -1319,7 +1319,7 @@ const synth_filter = times(64, i => times(32, j => Math.cos((16 + i) * (2 * j + 
 type VVecQType = {
     channel: number[][][];
 };
-function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freqinved: ReturnType<typeof freqinv>) {
+function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freqinved: ReturnType<typeof freqinv>, bandmask: boolean[]) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -1333,7 +1333,7 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
                 // yes, collect each subband's sample[ss]. seems odd.
                 const s_vec = times(32, i => freqinved.granule[gr].channel[ch].subband[i][ss]);
                 // matrixing. v_vec looks actually [2][32] but here [64] as concatenated...
-                const v_vec = times(64, i => times(32, j => s_vec[j] * synth_filter[i][j]).reduce((prev, cur) => prev + cur, 0));
+                const v_vec = times(64, i => times(32, j => bandmask[j] ? s_vec[j] * synth_filter[i][j] : 0).reduce((prev, cur) => prev + cur, 0));
 
                 v_vec_q_chs[ch] = [v_vec, ...v_vec_q_chs[ch].slice(0, 15)];
 
@@ -1359,7 +1359,7 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
     };
 }
 
-function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: FrameType, maindata: MaindataType) {
+function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: FrameType, maindata: MaindataType, bandmask: boolean[]) {
     // requantize, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
@@ -1370,7 +1370,7 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     // IMDCT, windowing and overlap adding are called "hybrid filter bank"
     const hysynthed_timedom = hybridsynth(frame, prevsound, antialiased);
     const freqinved = freqinv({ granule: hysynthed_timedom.granule });
-    const sbsynthed = subbandsynth(frame, prev_v_vec_q, freqinved);
+    const sbsynthed = subbandsynth(frame, prev_v_vec_q, freqinved, bandmask);
 
     return {
         channel: sbsynthed.channel,
@@ -1383,7 +1383,8 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     };
 }
 
-export async function parsefile(ab: ArrayBuffer) {
+export async function parsefile(ab: ArrayBuffer, rawBandmask: boolean[] | null = null) {
+    const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
     const maindatas = [];
@@ -1415,7 +1416,7 @@ export async function parsefile(ab: ArrayBuffer) {
                 if (framedata) {
                     maindatas.push(framedata);
 
-                    const { channel: sound, lastHybridTail, v_vec_q, internal } = decodeframe(prevVVecQ, prevHybridTail, frame, framedata);
+                    const { channel: sound, lastHybridTail, v_vec_q, internal } = decodeframe(prevVVecQ, prevHybridTail, frame, framedata, bandmask);
                     prevHybridTail = lastHybridTail;
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
