@@ -511,7 +511,12 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
         is.splice(is.length - 4, 4);
     }
     if (576 < is.length) {
-        throw new Error(`is exceeds 576: ${is.length}`);
+        // throw new Error(`is exceeds 576: ${is.length}`);
+        // some encoder emit data like this...
+        // reference decoder will break immediately on is.length===576.
+        // in this decoder, read till end, but caller rewinds to part2_3_length.
+        // so only truncating "is" to 576 is enough.
+        is.splice(576, is.length - 576);
     }
 
     const zero_part_begin = is.length;
