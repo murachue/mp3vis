@@ -663,6 +663,9 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
             const part3_length = sideinfo.part2_3_length - part2_length;
             const is_gr_ch = await readhuffman(r, frame, part3_length, gr, ch);
 
+            // we must seek, to recovery from "read exceeds count1-boundary" case.
+            r.seek(part2_start + sideinfo.part2_3_length);
+
             channel.push({
                 scalefac: scalefac_gr_ch,
                 is: is_gr_ch,
