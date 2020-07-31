@@ -893,6 +893,14 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
+    // using channel0(left) scalefac to calculate.
+    const scalefac = maindata_gr.channel[0].scalefac;
+    if (scalefac.type === "short") {
+        throw new Error("BadImpl: intensityLongTill but passed short");
+    }
+    // to simplify long-block, we append zero for very last of scalefac-band.
+    const scalefac_l = scalefac.scalefac_l.concat([0]);
+
     for (const band of times(till)) {
         const index = scalefactor_band_indices[sampfreq].long[band];
         const len = subbands_long_lengths[sampfreq][band];
@@ -905,12 +913,7 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
             continue;
         }
 
-        // using channel0(left) scalefac & is to calculate.
-        const scalefac = maindata_gr.channel[0].scalefac;
-        if (scalefac.type === "short") {
-            throw new Error("BadImpl: intensityLongTill but passed short");
-        }
-        const ratio = intensityRatio(scalefac.scalefac_l[band]);
+        const ratio = intensityRatio(scalefac_l[band]);
         if (!ratio) {
             // not intensity-stereo enabled band.
             processed[0].push(...stereosamples[0].slice(index, index + len));
@@ -920,8 +923,10 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
 
         const [left, right] = ratio;
         for (const i of times(len)) {
-            processed[0].push(stereosamples[0][index + i] * left);
-            processed[1].push(stereosamples[0][index + i] * right);
+            // also using channel0(left) "is" to calculate.
+            const intensity = stereosamples[0][index + i];
+            processed[0].push(intensity * left);
+            processed[1].push(intensity * right);
         }
     }
 
@@ -978,7 +983,7 @@ function intensitystereo(gr: number, frame: FrameType, maindata_gr: MaindataType
     const type = maindata_gr.channel[0].scalefac.type;
     switch (type) {
         case "long": { // sideinfo.block_type !== 2
-            return intensityLongTill(gr, frame, maindata_gr, stereosamples, 21);
+            return intensityLongTill(gr, frame, maindata_gr, stereosamples, 22);
         }
         case "short": { // sideinfo.switch_point === 0
             return intensityShortFrom(gr, frame, maindata_gr, stereosamples, 0);
