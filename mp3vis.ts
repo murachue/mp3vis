@@ -479,17 +479,22 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
             // block_split_flag=true then table_select[2] is undefined!
             continue;
         }
-        const hufftab = bigvalueHufftabs[sideinfo.table_select[region]];
+        const tabsel = sideinfo.table_select[region];
+        const hufftab = bigvalueHufftabs[tabsel];
+        // null table is valid but usually 0. throw if tabsel !== 0 to detect non-usual...
+        if (!hufftab.table && tabsel !== 0) {
+            throw new Error(`region${region} references bad table: ${tabsel}`);
+        }
         for (const _ of times(regionlen / 2)) { // they are raw "is" count... here reads by 2.
             is.push(...await readhuffbig(r, hufftab));
         }
     }
 
-    const bigpartlen = r.tell() - part3_start;
-    if (part3_length < bigpartlen) {
-        throw new Error(`big_value exceeds part3_length: ${part3_length} < ${bigpartlen}`);
+    const bigpartread = r.tell() - part3_start;
+    if (part3_length < bigpartread) {
+        throw new Error(`big_value exceeds part3_length: ${part3_length} < ${bigpartread}`);
     }
-    if (bigpartlen < part3_length && 576 <= is.length) {
+    if (bigpartread < part3_length && 576 <= is.length) {
         throw new Error("is already filled but garbage bits");
     }
 
@@ -499,10 +504,12 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     }
 
     // it may overruns... ex. GOGO no coder.
-    // const part3read = r.tell() - part3_start;
-    // if (part3_length < part3read) {
-    //     throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
-    // }
+    const part3read = r.tell() - part3_start;
+    if (part3_length < part3read) {
+        // throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
+        // we must treat this case; as we did not read last quads.
+        is.splice(is.length - 4, 4);
+    }
     if (576 < is.length) {
         throw new Error(`is exceeds 576: ${is.length}`);
     }
