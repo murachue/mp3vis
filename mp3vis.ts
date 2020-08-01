@@ -939,7 +939,15 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
-    for (const band of range(from, 12)) {
+    // using channel0(left) scalefac to calculate.
+    const scalefac = maindata_gr.channel[0].scalefac;
+    if (scalefac.type === "long") {
+        throw new Error("BadImpl: intensityShortFrom but passed long");
+    }
+    // to simplify, we append zero(s per window) for very last of scalefac-band.
+    const scalefac_s = scalefac.scalefac_s.concat([[0, 0, 0]]);
+
+    for (const band of range(from, 13)) {
         const index = scalefactor_band_indices[sampfreq].short[band] * 3;
         const len = subbands_short_lengths[sampfreq][band];
 
@@ -951,13 +959,8 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
             continue;
         }
 
-        // using channel0(left) scalefac & is to calculate.
         for (const window of times(3)) {
-            const scalefac = maindata_gr.channel[0].scalefac;
-            if (scalefac.type === "long") {
-                throw new Error("BadImpl: intensityShortFrom but passed long");
-            }
-            const ratio = intensityRatio(scalefac.scalefac_s[band][window]);
+            const ratio = intensityRatio(scalefac_s[band][window]);
             if (!ratio) {
                 // not intensity-stereo enabled band.
                 processed[0].push(...stereosamples[0].slice(index, index + len));
@@ -969,8 +972,10 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
             const index_win = index + len * window;
             const [left, right] = ratio;
             for (const i of times(len)) {
-                processed[0].push(stereosamples[0][index_win + i] * left);
-                processed[1].push(stereosamples[0][index_win + i] * right);
+                // also using channel0(left) "is" to calculate.
+                const intensity = stereosamples[0][index_win + i];
+                processed[0].push(intensity * left);
+                processed[1].push(intensity * right);
             }
         }
     }
