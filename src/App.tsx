@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import './App.css';
 import { Zoombar } from './Zoombar';
 import { Checkband } from './Checkband';
-import { parsefile } from './libmp3';
+import { parsefile, PromiseType } from './libmp3';
 import { Dropbox } from './Dropbox';
 
 function App() {
   const [bandmask, setBandmask] = useState(Array(32).fill(true));
-  const [parsed, setParsed] = useState({ frames: [], maindatas: [], soundframes: [[]], internals: [] });
+  const [parsed, setParsed] = useState<PromiseType<ReturnType<typeof parsefile>>>({ frames: [], maindatas: [], soundframes: [], internals: [] });
   const [parsedFrames, setParsedFrames] = useState(null as number | null);
   const [parsedMaindatas, setParsedMaindatas] = useState(null as number | null);
   const [onDLSample, setOnDLSample] = useState(null as [() => void] | null);
@@ -17,15 +17,20 @@ function App() {
   async function parse(ab: ArrayBuffer) {
     setParsedFrames(0);
     setParsedMaindatas(null);
+    let parsing: typeof parsed = { frames: [], maindatas: [], soundframes: [], internals: [] };
+    setParsed(parsing);
     await new Promise(r => setTimeout(r, 0));
 
     const { frames, maindatas, soundframes, internals } = await parsefile(ab, async (iter) => {
       setParsedFrames(iter.i);
+      parsing = { frames: [...parsing.frames, iter.frame], maindatas: [...parsing.maindatas], soundframes: [...parsing.soundframes], internals: [...parsing.internals] };
+      setParsed(parsing);
       await new Promise(r => setTimeout(r, 0));
       return true;
     }, bandmask);
 
-    setParsedMaindatas(frames.length);
+    setParsed({ frames, maindatas, soundframes, internals });
+    setParsedFrames(frames.length);
     setParsedMaindatas(maindatas.length);
     await new Promise(r => setTimeout(r, 0));
 
@@ -113,6 +118,64 @@ function App() {
     ctx.stroke();
   };
 
+  const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
+    ctx.fillStyle = "#222";
+    ctx.globalAlpha = 1.0;
+    ctx.fillRect(0, 0, width, height);
+
+    if (0 < data.soundframes.length) {
+      // FIXME: should do this on data set, not each draw!!!
+      const soundsPerCh = Array(data.soundframes[0].length).fill(0).map((_, ch) => data.soundframes.flatMap(e => e[ch]));
+      const peaksPerCh = soundsPerCh.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
+        const from = Math.floor(ch.length * i / width);
+        const to = Math.min(from + 1, Math.floor(ch.length * (i + 1) / width));
+        const peak = ch.slice(from, to).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
+        return peak;
+      }));
+
+      ctx.globalAlpha = 0.5;
+
+      const drawPeakRange = (color: string, peaks: number[]) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, peaks[0]);
+        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
+        peaks.map((peak, x) => [peak, x]).reverse().forEach(([peak, x]) => ctx.lineTo(x, height / 2 + height / 2 * peak));
+        ctx.closePath();
+        ctx.fill();
+      };
+      const drawPeakLine = (color: string, peaks: number[]) => {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, peaks[0]);
+        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, peaks[0]);
+        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 + height / 2 * peak));
+        ctx.stroke();
+      };
+
+      drawPeakRange("#8f8", peaksPerCh[0]);
+      drawPeakLine("#4f4", peaksPerCh[0]);
+      if (peaksPerCh[1]) {
+        drawPeakRange("#88f", peaksPerCh[1]);
+        drawPeakLine("#44f", peaksPerCh[1]);
+      }
+    }
+  };
+  const drawZoomWave = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed) => {
+    // ctx.fillStyle = zoompush ? "darkgreen" : "black";
+    // ctx.fillRect(0.5, 0.5, width, height);
+    // ctx.strokeStyle = "white";
+    // ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+    // ctx.strokeStyle = "red";
+    // ctx.beginPath();
+    // ctx.moveTo(offset * width + 0.5, 0 + 0.5);
+    // ctx.lineTo(offset * width + 0.5, height + 0.5);
+    // ctx.stroke();
+  };
+
   return (
     <div>
       <p>hello</p>
@@ -120,14 +183,14 @@ function App() {
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
           <p>drag here</p>
           <p>{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
-          <canvas id="wavescope" style={{ width: "100%", height: "100px" }}></canvas>
+          <Zoombar width={"100%"} height={100} barHeight={60} zoomWidth={100} drawWhole={drawWholeWave} drawZoom={drawZoomWave} data={parsed} />
+          <Zoombar width={"100%"} height={40} barHeight={30} zoomWidth={100} drawWhole={drawWhole} drawZoom={drawZoom} data={parsed} onPointerDown={() => setZoompush(true)} onPointerUp={() => setZoompush(false)} />
           <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><button disabled={!onDLSample} onClick={onDLSample?.[0]}>download raw sample</button></p>
           <p><button disabled={!onPlay} onClick={onPlay?.[0]}>play sample</button></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>
-      <Zoombar width={"50%"} height={40} barHeight={30} zoomWidth={100} drawWhole={drawWhole} drawZoom={drawZoom} data={parsed} onPointerDown={() => setZoompush(true)} onPointerUp={() => setZoompush(false)}></Zoombar>
     </div >
   );
 }

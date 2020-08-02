@@ -1,7 +1,7 @@
 import { times, range } from "lodash-es";
 
 // https://log.pocka.io/posts/typescript-promisetype/
-type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
+export type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
     ? P
     : never;
 
