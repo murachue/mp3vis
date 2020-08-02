@@ -92,9 +92,9 @@ function App() {
     <div>
       <p>hello</p>
       <Dropbox onFileDrop={parse}>
-        <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em" }}>
-          drag here
-		    <p>{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
+        <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
+          <p>drag here</p>
+          <p>{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
           <canvas id="wavescope" style={{ width: "100%", height: "100px" }}></canvas>
           <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><a href={onDLSample ? "#" : undefined} onClick={onDLSample ? (e) => onDLSample[0]() : undefined}>download raw sample</a></p>
