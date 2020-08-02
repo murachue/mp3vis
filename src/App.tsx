@@ -90,14 +90,16 @@ function App() {
   return (
     <div>
       <p>hello</p>
-      <Dropbox onFileDrop={parse} style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em" }}>
-        drag here
+      <Dropbox onFileDrop={parse}>
+        <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em" }}>
+          drag here
 		    <p>{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
-        <canvas id="wavescope" style={{ width: "100%", height: "100px" }}></canvas>
-        <Checkband checks={bandmask} onChanged={setBandmask} />
-        <p><a href={onDLSample ? "#" : undefined} onClick={onDLSample ? (e) => onDLSample[0]() : undefined}>download raw sample</a></p>
-        <p><a href={onPlay ? "#" : undefined} onClick={onPlay ? (e) => onPlay[0]() : undefined}>play sample</a></p>
-        <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
+          <canvas id="wavescope" style={{ width: "100%", height: "100px" }}></canvas>
+          <Checkband checks={bandmask} onChanged={setBandmask} />
+          <p><a href={onDLSample ? "#" : undefined} onClick={onDLSample ? (e) => onDLSample[0]() : undefined}>download raw sample</a></p>
+          <p><a href={onPlay ? "#" : undefined} onClick={onPlay ? (e) => onPlay[0]() : undefined}>play sample</a></p>
+          <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
+        </div>
       </Dropbox>
       <Zoombar width={"50%"}></Zoombar>
     </div >
