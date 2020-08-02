@@ -267,16 +267,19 @@ async function readframe(r: U8BitReader) {
     if (header.bitrate_index === 0) {
         throw new Error("free-format not supported yet");
     }
-    const headbytes = r.tell() / 8 - offset;
+    const head_side_size = r.tell() / 8 - offset;
     const framebytes = frame_bytes(header);
-    const data = await r.readbytes(framebytes - headbytes);
+    const data = await r.readbytes(framebytes - head_side_size);
+    const totalsize = r.tell() / 8 - offset;
     // TODO: crc_check
     return {
         offset,
         header,
         crc_check,
         sideinfo,
+        head_side_size,
         data, // not main_data that is reassembled.
+        totalsize,
     };
 }
 
