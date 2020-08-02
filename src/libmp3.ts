@@ -1413,7 +1413,13 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     };
 }
 
-export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, frame: PromiseType<ReturnType<typeof readframe>>, maindata?: any, soundframe?: any, internal?: any; }) => Promise<boolean> = async () => true, rawBandmask: boolean[] | null = null) {
+export async function parsefile(ab: ArrayBuffer, callback: (iter: {
+    i: number,
+    frame: PromiseType<ReturnType<typeof readframe>>,
+    maindata?: PromiseType<ReturnType<typeof unpackframe>>,
+    soundframe?: ReturnType<typeof decodeframe>["channel"],
+    internal?: ReturnType<typeof decodeframe>["internal"];
+}) => Promise<boolean> = async () => true, rawBandmask: boolean[] | null = null) {
     const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
@@ -1451,7 +1457,7 @@ export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, f
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
                     internals.push(internal);
-                    const cont = await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal: internals });
+                    const cont = await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal });
                     if (!cont) {
                         break;
                     }

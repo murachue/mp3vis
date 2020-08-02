@@ -1,17 +1,18 @@
 import React from 'react';
 
-export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, data, onPointerDown, onPointerUp, ...props }: {
+export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, zooming, data, onPointerDown, onPointerUp, ...props }: {
     width: string | number;
     height: string | number;
     barHeight: number;
     zoomWidth: number;
     drawWhole: (ctx: CanvasRenderingContext2D, width: number, height: number, data: T) => void;
     drawZoom: (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: T) => void;
+    zooming: boolean;
     data: T;
 } & JSX.IntrinsicElements["canvas"]) {
     const refCanvas = React.createRef<HTMLCanvasElement>();
 
-    const [mousepos, setMousepos] = React.useState<[number, number] | null>(null);
+    const [mousepos, setMousepos] = React.useState<[number, number]>([0, 0]);
 
     React.useEffect(() => {
         const canvas = refCanvas.current;
@@ -37,15 +38,16 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         drawWhole(ctx, cw, barHeight, data);
         ctx.restore();
 
-        if (mousepos) {
-            const x = Math.max(0, Math.min(mousepos[0] - zoomWidth / 2, cw - zoomWidth));
+        if (zooming) {
+            const mx = Math.max(0, Math.min(mousepos[0], cw));
+            const wx = Math.max(0, Math.min(mx - zoomWidth / 2, cw - zoomWidth));
 
             ctx.save();
-            ctx.translate(x, 0);
+            ctx.translate(wx, 0);
             ctx.beginPath();
             ctx.rect(0, 0, zoomWidth + 1, ch + 1);
             ctx.clip();
-            drawZoom(ctx, mousepos[0] / cw, zoomWidth, ch, data);
+            drawZoom(ctx, mx / cw, zoomWidth, ch, data);
             ctx.restore();
         }
     });
@@ -77,7 +79,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
     };
 
     const leave = function (e: React.MouseEvent<HTMLCanvasElement, MouseEvent>) {
-        setMousepos(null);
+        // setMousepos(null);
     };
 
     return (<canvas {...props} width="1" height="1" ref={refCanvas} style={{ width, height }} onMouseOver={enterMove} onMouseOut={leave} onMouseMove={enterMove} onPointerDown={(e: any) => { e.target.setPointerCapture(e.pointerId); onPointerDown?.(e); }} onPointerUp={(e: any) => { e.target.releasePointerCapture(e.pointerId); onPointerUp?.(e); }} />);
