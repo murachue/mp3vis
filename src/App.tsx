@@ -58,9 +58,10 @@ function App() {
           if (0 < mainsize) {
             // first, find beginning.
             let start = null;
-            let i = parsing.frames.length - 2;
+            let i = parsing.frames.length - 1;
             let remain = iter.frame.sideinfo.main_data_end; // defined out of loop only for logging error...
-            for (; 0 < remain && 0 <= i; i--) {
+            for (; 0 < remain && 0 <= i;) {
+              i--;
               const thatFrame = parsing.frames[i];
               // XXX: what if data including extra bytes after frame?
               const datalen = thatFrame.data.length; // === thatFrame.totalsize - thatFrame.head_side_size;
@@ -174,11 +175,13 @@ function App() {
           ctx.fillStyle = "#fcf";
           ctx.fillRect(1 + i * w + (4 / frame.totalsize) * (w - 2), 1, (frame.head_side_size - 4) / frame.totalsize * (w - 2), height - 2);
           // maindatas
-          const rainbow = ["#afa", "#ffa", "#fca", "#faa", "#faf", "#aaf", "#aff"]; // at most 3 is enough in spec, but more in the wild.
-          data.framerefs[i].forEach((ref, ref_i) => {
-            ctx.fillStyle = rainbow[ref_i % rainbow.length];
+          const rainbow = ["#afa", "#ffa", "#fca", "#faa", "#faf", "#aaf"]; // at most 3 is enough in spec, but more in the wild.
+          for (const ref of data.framerefs[i]) {
+            const nback = ref.main_i - i;
+            const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
+            ctx.fillStyle = rainbow[color_i];
             ctx.fillRect(1 + i * w + (ref.offset / frame.totalsize) * (w - 2), 1, (ref.size) / frame.totalsize * (w - 2), height - 2);
-          });
+          }
         });
       } else {
         // overview
