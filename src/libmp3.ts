@@ -1413,7 +1413,7 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     };
 }
 
-export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, frame: PromiseType<ReturnType<typeof readframe>>, maindata?: any, soundframe?: any, internal?: any; }) => Promise<void> = async () => { }, rawBandmask: boolean[] | null = null) {
+export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, frame: PromiseType<ReturnType<typeof readframe>>, maindata?: any, soundframe?: any, internal?: any; }) => Promise<boolean> = async () => true, rawBandmask: boolean[] | null = null) {
     const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
@@ -1451,14 +1451,24 @@ export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, f
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
                     internals.push(internal);
-                    await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal: internals });
+                    const cont = await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal: internals });
+                    if (!cont) {
+                        break;
+                    }
                 } else {
-                    await callback({ i: frames.length, frame });
+                    // not enough reservoir
+                    const cont = await callback({ i: frames.length, frame });
+                    if (!cont) {
+                        break;
+                    }
                 }
             } catch{
-                // ignore for main_data decoding
+                // so broken maindata or bug in our code; ignore for main_data decoding
 
-                await callback({ i: frames.length, frame });
+                const cont = await callback({ i: frames.length, frame });
+                if (!cont) {
+                    break;
+                }
             }
         } catch {
             // try next byte, synchronizing to byte

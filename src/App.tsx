@@ -21,6 +21,7 @@ function App() {
     const { frames, maindatas, soundframes, internals } = await parsefile(ab, async (iter) => {
       setParsedFrames(iter.i);
       await new Promise(r => setTimeout(r, 0));
+      return true;
     }, bandmask);
 
     setParsedMaindatas(frames.length);
