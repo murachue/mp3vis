@@ -21,13 +21,15 @@ let aborted = false;
 function App() {
   const [bandmask, setBandmask] = useState(Array(32).fill(true));
   const [parsed, setParsed] = useState<MyParsed>({ frames: [], maindatas: [], sounds: [], internals: [], framerefs: [] });
-  const [parsedFrames, setParsedFrames] = useState(null as number | null);
-  const [parsedMaindatas, setParsedMaindatas] = useState(null as number | null);
-  const [onDLSample, setOnDLSample] = useState(null as [() => void] | null);
-  const [onPlay, setOnPlay] = useState(null as [() => void] | null);
+  const [parsedFrames, setParsedFrames] = useState<number | null>(null);
+  const [parsedMaindatas, setParsedMaindatas] = useState<number | null>(null);
+  const [onDLSample, setOnDLSample] = useState<[() => void] | null>(null);
+  const [onPlay, setOnPlay] = useState<[() => void] | null>(null);
+  const [zoomingFrame, setZoomingFrame] = useState(false);
   const [selectingFrame, setSelectingFrame] = useState(false);
   const [zoomingWave, setZoomingWave] = useState(false);
   const [abortable, setAbortable] = useState(false);
+  const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
 
   async function parse(ab: ArrayBuffer) {
     setParsedFrames(0);
@@ -154,6 +156,34 @@ function App() {
     */
   }
 
+  const onZoomFrame = (offset: number | null) => {
+    if (offset && selectingFrame) {
+      setSelectedFrame(Math.floor(parsed.frames.length * offset));
+    }
+  };
+
+  const drawFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed, i: number) => {
+    const frame = data.frames[i];
+    const xscale = width / frame.totalsize;
+    // whole (at last becomes empty)
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, width, height);
+    // header
+    ctx.fillStyle = "#cac";
+    ctx.fillRect(0, 0, 4 * xscale, height);
+    // sideinfo
+    ctx.fillStyle = "#fdf";
+    ctx.fillRect(4 * xscale, 0, (frame.head_side_size - 4) * xscale, height);
+    // maindatas
+    const rainbow = ["#afa", "#ffa", "#fca", "#faa", "#faf", "#aaf"]; // at most 3 is enough in spec, but more in the wild.
+    for (const ref of data.framerefs[i]) {
+      const nback = ref.main_i - i;
+      const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
+      ctx.fillStyle = rainbow[color_i];
+      ctx.fillRect(ref.offset * xscale, 0, ref.size * xscale, height);
+    }
+  };
+
   const drawWholeFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
     ctx.fillStyle = "gray";
     ctx.fillRect(0, 0, width, height);
@@ -164,24 +194,11 @@ function App() {
         // full
         // TODO: also visualize frame size (for VBR)
         const w = Math.min(width / data.frames.length, 200);
-        data.frames.forEach((frame, i) => {
-          // whole (at last becomes empty)
-          ctx.fillStyle = "white";
-          ctx.fillRect(1 + i * w, 1, w - 2, height - 2);
-          // header
-          ctx.fillStyle = "#cac";
-          ctx.fillRect(1 + i * w, 1, (4 / frame.totalsize) * (w - 2), height - 2);
-          // sideinfo
-          ctx.fillStyle = "#fcf";
-          ctx.fillRect(1 + i * w + (4 / frame.totalsize) * (w - 2), 1, (frame.head_side_size - 4) / frame.totalsize * (w - 2), height - 2);
-          // maindatas
-          const rainbow = ["#afa", "#ffa", "#fca", "#faa", "#faf", "#aaf"]; // at most 3 is enough in spec, but more in the wild.
-          for (const ref of data.framerefs[i]) {
-            const nback = ref.main_i - i;
-            const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
-            ctx.fillStyle = rainbow[color_i];
-            ctx.fillRect(1 + i * w + (ref.offset / frame.totalsize) * (w - 2), 1, (ref.size) / frame.totalsize * (w - 2), height - 2);
-          }
+        data.frames.forEach((_frame, i) => { // eslint-disable @typescript/unused-variable
+          ctx.save();
+          ctx.translate(1 + i * w, 1);
+          drawFrame(ctx, w - 2, height - 2, data, i);
+          ctx.restore();
         });
       } else {
         // overview
@@ -190,15 +207,35 @@ function App() {
   };
 
   const drawZoomFrame = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed) => {
-    // ctx.fillStyle = selectingFrame ? "darkgreen" : "black";
-    // ctx.fillRect(0.5, 0.5, width, height);
-    // ctx.strokeStyle = "white";
-    // ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
-    // ctx.strokeStyle = "red";
-    // ctx.beginPath();
-    // ctx.moveTo(offset * width + 0.5, 0 + 0.5);
-    // ctx.lineTo(offset * width + 0.5, height + 0.5);
-    // ctx.stroke();
+    ctx.fillStyle = "gray";
+    ctx.fillRect(0.5, 0.5, width, height);
+
+    const onew = 200;
+    const pad = 20;
+    const interval = onew + pad;
+    const centerlx = (width - onew) / 2;
+
+    // const from = offset * (parsed.frames.length - 1) - (1 - 220 / width) / 2;
+    const hi = (parsed.frames.length - 1) * offset; // including fraction
+    const to = Math.min(hi + 3, parsed.frames.length);
+    for (let i_f = hi - 1; i_f < to; i_f++) {
+      if (i_f < 0) {
+        continue;
+      }
+      const i = Math.floor(i_f);
+      ctx.fillStyle = "white";
+      ctx.save();
+      ctx.translate((i - hi) * interval + centerlx, 20);
+      drawFrame(ctx, 200, height - 25, data, i);
+      ctx.fillStyle = "white";
+      ctx.font = "15px sans-serif";
+      ctx.textBaseline = "top";
+      ctx.fillText(`${i}: ${parsed.frames[i].offset}`, 0, -15);
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
   };
 
   const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
@@ -252,9 +289,6 @@ function App() {
     ctx.fillStyle = "#222";
     ctx.fillRect(0.5, 0.5, width, height);
 
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
-
     const from = Math.floor((data.sounds[0].length - width) * offset);
 
     // ctx.globalAlpha = 0.5;
@@ -272,6 +306,9 @@ function App() {
     if (data.sounds[1]) {
       drawWave("#88f", data.sounds[1].slice(from, from + width));
     }
+
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
   };
 
   return (
@@ -287,9 +324,11 @@ function App() {
             zooming={zoomingWave && !!parsed.sounds[0]} data={parsed}
             onPointerDown={() => setZoomingWave(true)} onPointerUp={() => setZoomingWave(false)}
           />
-          <Zoombar width={"100%"} height={40} barHeight={30} zoomWidth={300}
+          <Zoombar width={"100%"} height={60} barHeight={30} zoomWidth={300}
             drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
-            zooming={true} data={parsed}
+            zooming={zoomingFrame} data={parsed}
+            onZoom={onZoomFrame}
+            onPointerOver={() => setZoomingFrame(true)} onPointerOut={() => setZoomingFrame(false)}
             onPointerDown={() => setSelectingFrame(true)} onPointerUp={() => setSelectingFrame(false)}
           />
           <Checkband checks={bandmask} onChanged={setBandmask} />
