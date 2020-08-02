@@ -128,18 +128,19 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
     const private_bits = await r.readbits(is_mono ? 5 : 3);
     // note: scfsi just for long windows.
     const scfsi = [];
-    for (const ch of times(nchans)) {
+    for (const ch of times(nchans)) { // eslint-disable-line @typescript-eslint/no-unused-vars
         const scfsi_ch = [];
-        for (const band of times(4)) { // for bands 0..5, 6..10, 11..15, 16..20 (note: only first is 6 elms not 5!)
+        // for bands 0..5, 6..10, 11..15, 16..20 (note: only first is 6 elms not 5!)
+        for (const band of times(4)) { // eslint-disable-line @typescript-eslint/no-unused-vars
             scfsi_ch.push(await r.readbits(1));
         }
         scfsi.push(scfsi_ch);
     }
 
     const granule_tmp = [];
-    for (const gr of times(2)) {
+    for (const gr of times(2)) { // eslint-disable-line @typescript-eslint/no-unused-vars
         const channel = [];
-        for (const ch of times(nchans)) {
+        for (const ch of times(nchans)) { // eslint-disable-line @typescript-eslint/no-unused-vars
             const part2_3_length = await r.readbits(12);
             const big_values = await r.readbits(9);
             const global_gain = await r.readbits(8);
@@ -152,11 +153,11 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     const block_type = await r.readbits(2);
                     const switch_point = await r.readbits(1);
                     const table_select = [];
-                    for (const region of times(2)) {
+                    for (const region of times(2)) { // eslint-disable-line @typescript-eslint/no-unused-vars
                         table_select.push(await r.readbits(5));
                     }
                     const subblock_gain = [];
-                    for (const window of times(3)) {
+                    for (const window of times(3)) { // eslint-disable-line @typescript-eslint/no-unused-vars
                         subblock_gain.push(await r.readbits(3));
                     }
 
@@ -185,7 +186,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                 } else {
                     // normal window
                     const table_select = [];
-                    for (const region of times(3)) {
+                    for (const region of times(3)) { // eslint-disable-line @typescript-eslint/no-unused-vars
                         table_select.push(await r.readbits(5));
                     }
                     const region_address1 = await r.readbits(4);
@@ -257,7 +258,7 @@ async function readframe(r: U8BitReader) {
     const offset = r.tell() / 8;
     const header = await readheader(r);
     const crc_check = (header.protection_bit === 0) ? await r.readbits(16) : null;
-    if (header.layer != 1) { // layer3
+    if (header.layer !== 1) { // layer3
         throw new Error("!not-layer3");
     }
     const sideinfo = await readlayer3sideinfo(r, header);
@@ -446,7 +447,7 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     // IIS and Lagerstrom uses block_split_flag.
     // mp3decoder(haskell) completely ignores block_split_flag.
     // but also region_start* are set (const) even when block_type==2??
-    const is_shortblock = (sideinfo.block_type == 2 && sideinfo.block_split_flag);
+    const is_shortblock = (sideinfo.block_type === 2 && sideinfo.block_split_flag);
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
@@ -485,7 +486,8 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
         if (!hufftab.table && tabsel !== 0) {
             throw new Error(`region${region} references bad table: ${tabsel}`);
         }
-        for (const _ of times(regionlen / 2)) { // they are raw "is" count... here reads by 2.
+        // they are raw "is" count... here reads by 2.
+        for (const pair_i of times(regionlen / 2)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
             is.push(...await readhuffbig(r, hufftab));
         }
     }
@@ -576,7 +578,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                         for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
                             for (const band of range(sfrbeg, sfrend + 1)) {
                                 const scalefac_s_w_band = [];
-                                for (const window of times(3)) {
+                                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
                                     scalefac_s_w_band.push(await r.readbits(slen));
                                 }
                                 scalefac_s[band] = scalefac_s_w_band;
@@ -594,7 +596,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                             for (const band of range(sfrbeg, sfrend + 1)) {
                                 // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
                                 const scalefac_s_w_band = [];
-                                for (const window of times(3)) {
+                                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
                                     scalefac_s_w_band.push(await r.readbits(slen));
                                 }
                                 scalefac_s[band] = scalefac_s_w_band;
@@ -614,7 +616,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                     // note: we want flatMap but order of reading bits is strictly important. we must use reduce to ensure it.
                     const scalefac_l = await band_groups.reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
                         const scalefacs = await prev;
-                        for (const band of range(sfrbeg, sfrend + 1)) {
+                        for (const band of range(sfrbeg, sfrend + 1)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
                             if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
                                 const sf = await r.readbits(slen);
                                 scalefacs.push(sf); // scalefac_l[band] = sf;
@@ -648,7 +650,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
                             if (scalefac_gr0_ch.type !== "long") {
                                 throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
                             }
-                            const [sfrbegin, sfrend, _slen] = band_groups[group];
+                            const [sfrbegin, sfrend, _slen] = band_groups[group];  // eslint-disable-line @typescript-eslint/no-unused-vars
                             for (const band of range(sfrbegin, sfrend + 1)) {
                                 scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
                             }
@@ -766,7 +768,7 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
     let i = scalefactor_band_indices[sampfreq].short[from] * 3;
     for (const band of range(from, 13)) {
         for (const win of times(3)) {
-            for (const band_i of times(band_len[band])) {
+            for (const band_i of times(band_len[band])) {  // eslint-disable-line @typescript-eslint/no-unused-vars
                 const rawsample = is[i];
                 const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], 0, global_gain, subblock_gain[win]);
                 i++;
@@ -1172,7 +1174,7 @@ function hybridsynth(frame: FrameType, rawprevtail: SubbandsType | null, antiali
                 const tail = timedom.slice(18);
                 // prev and current(timedom) are already windowed, just add to mix.
                 // don't forget to pick only first-half (18/36).
-                const mixed = head.map((e, i) => e + prevtail.channel[ch].subband[sb][i]);
+                const mixed = head.map((e, i) => e + prevtail.channel[ch].subband[sb][i]);  // eslint-disable-line no-loop-func
 
                 subband.push(mixed);
                 tail_sb.push(tail);
