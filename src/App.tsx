@@ -158,7 +158,10 @@ function App() {
 
   const onZoomFrame = (offset: number | null) => {
     if (offset && selectingFrame) {
-      setSelectedFrame(Math.floor(parsed.frames.length * offset));
+      const onew = 200;
+      const pad = 20;
+      const interval = onew + pad;
+      setSelectedFrame(Math.floor((parsed.frames.length - onew / interval) * offset + 0.5));
     }
   };
 
@@ -184,7 +187,7 @@ function App() {
     }
   };
 
-  const drawWholeFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
+  const drawWholeFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed & { selectedFrame: number | null; }) => {
     ctx.fillStyle = "gray";
     ctx.fillRect(0, 0, width, height);
 
@@ -198,15 +201,20 @@ function App() {
           ctx.save();
           ctx.translate(1 + i * w, 1);
           drawFrame(ctx, w - 2, height - 2, data, i);
+          if (i === data.selectedFrame) {
+            ctx.strokeStyle = "red";
+            ctx.strokeRect(0, 0, w - 2, height - 2);
+          }
           ctx.restore();
         });
       } else {
         // overview
+        // TODO; color by max-far-ref?
       }
     }
   };
 
-  const drawZoomFrame = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed) => {
+  const drawZoomFrame = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed & { selectedFrame: number | null; }) => {
     ctx.fillStyle = "gray";
     ctx.fillRect(0.5, 0.5, width, height);
 
@@ -223,11 +231,15 @@ function App() {
         continue;
       }
       const i = Math.floor(i_f);
-      ctx.fillStyle = "white";
       ctx.save();
       ctx.translate((i - hi) * interval + centerlx, 20);
       drawFrame(ctx, 200, height - 25, data, i);
       ctx.fillStyle = "white";
+      if (i === data.selectedFrame) {
+        ctx.fillStyle = "red";
+        ctx.strokeStyle = "red";
+        ctx.strokeRect(0, 0, 200, height - 25);
+      }
       ctx.font = "15px sans-serif";
       ctx.textBaseline = "top";
       ctx.fillText(`${i}: ${parsed.frames[i].offset}`, 0, -15);
@@ -326,7 +338,7 @@ function App() {
           />
           <Zoombar width={"100%"} height={60} barHeight={30} zoomWidth={300}
             drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
-            zooming={zoomingFrame} data={parsed}
+            zooming={zoomingFrame} data={{ ...parsed, selectedFrame }}
             onZoom={onZoomFrame}
             onPointerOver={() => setZoomingFrame(true)} onPointerOut={() => setZoomingFrame(false)}
             onPointerDown={() => setSelectingFrame(true)} onPointerUp={() => setSelectingFrame(false)}

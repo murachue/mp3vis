@@ -78,7 +78,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         const canvas = refCanvas.current;
         if (canvas) {
             setMousepos([e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop]);
-            onZoom?.(getOffset(e.clientX - canvas.offsetLeft, canvas.width));
+            onZoom?.(getOffset(e.clientX - canvas.offsetLeft, canvas.width) / canvas.offsetWidth);
         }
     };
 
