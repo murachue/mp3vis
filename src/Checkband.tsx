@@ -16,6 +16,6 @@ export function Checkband({ checks, onChanged }: { checks: boolean[]; onChanged:
     };
 
     return (<div>
-        {checks.map((checked, i) => <input type="checkbox" checked={checked} onClick={onClickGen(i)} key={i} />)}
+        {checks.map((checked, i) => <input type="checkbox" checked={checked} onChange={() => { /* delegated to onCheck */ }} onClick={onClickGen(i)} key={i} />)}
     </div>);
 }
