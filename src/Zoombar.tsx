@@ -1,6 +1,14 @@
 import React from 'react';
 
-export function Zoombar({ width }: { width: string | number; }) {
+export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, data, onPointerDown, onPointerUp, ...props }: {
+    width: string | number;
+    height: string | number;
+    barHeight: number;
+    zoomWidth: number;
+    drawWhole: (ctx: CanvasRenderingContext2D, width: number, height: number, data: T) => void;
+    drawZoom: (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: T) => void;
+    data: T;
+} & JSX.IntrinsicElements["canvas"]) {
     const refCanvas = React.createRef<HTMLCanvasElement>();
 
     const [mousepos, setMousepos] = React.useState<[number, number] | null>(null);
@@ -21,22 +29,24 @@ export function Zoombar({ width }: { width: string | number; }) {
         // seems not required...
         // ctx.clearRect(0, 0, cw, ch);
 
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 5, cw, ch - 10);
-
-        ctx.strokeStyle = "white";
-        ctx.lineCap = "round";
+        ctx.save();
+        ctx.translate(0, (ch - barHeight) / 2);
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(100, 20);
-        ctx.stroke();
+        ctx.rect(0, 0, cw + 1, barHeight + 1);
+        ctx.clip();
+        drawWhole(ctx, cw, barHeight, data);
+        ctx.restore();
 
         if (mousepos) {
-            ctx.strokeStyle = "red";
+            const x = Math.max(0, Math.min(mousepos[0] - zoomWidth / 2, cw - zoomWidth));
+
+            ctx.save();
+            ctx.translate(x, 0);
             ctx.beginPath();
-            ctx.moveTo(mousepos[0] + 0.5, 0 + 0.5);
-            ctx.lineTo(mousepos[0] + 0.5, ch + 0.5);
-            ctx.stroke();
+            ctx.rect(0, 0, zoomWidth + 1, ch + 1);
+            ctx.clip();
+            drawZoom(ctx, mousepos[0] / cw, zoomWidth, ch, data);
+            ctx.restore();
         }
     });
 
@@ -70,5 +80,5 @@ export function Zoombar({ width }: { width: string | number; }) {
         setMousepos(null);
     };
 
-    return (<canvas width="1" height={40} ref={refCanvas} style={{ width, height: 40 }} onMouseOver={enterMove} onMouseOut={leave} onMouseMove={enterMove} />);
+    return (<canvas {...props} width="1" height="1" ref={refCanvas} style={{ width, height }} onMouseOver={enterMove} onMouseOut={leave} onMouseMove={enterMove} onPointerDown={(e: any) => { e.target.setPointerCapture(e.pointerId); onPointerDown?.(e); }} onPointerUp={(e: any) => { e.target.releasePointerCapture(e.pointerId); onPointerUp?.(e); }} />);
 }

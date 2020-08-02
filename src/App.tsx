@@ -12,6 +12,7 @@ function App() {
   const [parsedMaindatas, setParsedMaindatas] = useState(null as number | null);
   const [onDLSample, setOnDLSample] = useState(null as [() => void] | null);
   const [onPlay, setOnPlay] = useState(null as [() => void] | null);
+  const [zoompush, setZoompush] = useState(false);
 
   async function parse(ab: ArrayBuffer) {
     setParsedFrames(0);
@@ -88,6 +89,30 @@ function App() {
     */
   }
 
+  const drawWhole = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
+    ctx.fillStyle = "gray";
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = "white";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(100, 20);
+    ctx.stroke();
+  };
+
+  const drawZoom = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed) => {
+    ctx.fillStyle = zoompush ? "darkgreen" : "black";
+    ctx.fillRect(0.5, 0.5, width, height);
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+    ctx.strokeStyle = "red";
+    ctx.beginPath();
+    ctx.moveTo(offset * width + 0.5, 0 + 0.5);
+    ctx.lineTo(offset * width + 0.5, height + 0.5);
+    ctx.stroke();
+  };
+
   return (
     <div>
       <p>hello</p>
@@ -102,7 +127,7 @@ function App() {
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>
-      <Zoombar width={"50%"}></Zoombar>
+      <Zoombar width={"50%"} height={40} barHeight={30} zoomWidth={100} drawWhole={drawWhole} drawZoom={drawZoom} data={parsed} onPointerDown={() => setZoompush(true)} onPointerUp={() => setZoompush(false)}></Zoombar>
     </div >
   );
 }
