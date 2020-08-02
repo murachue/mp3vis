@@ -122,8 +122,8 @@ function App() {
           <p>{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
           <canvas id="wavescope" style={{ width: "100%", height: "100px" }}></canvas>
           <Checkband checks={bandmask} onChanged={setBandmask} />
-          <p><a href={onDLSample ? "#" : undefined} onClick={onDLSample ? (e) => onDLSample[0]() : undefined}>download raw sample</a></p>
-          <p><a href={onPlay ? "#" : undefined} onClick={onPlay ? (e) => onPlay[0]() : undefined}>play sample</a></p>
+          <p><button disabled={!onDLSample} onClick={onDLSample?.[0]}>download raw sample</button></p>
+          <p><button disabled={!onPlay} onClick={onPlay?.[0]}>play sample</button></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>
