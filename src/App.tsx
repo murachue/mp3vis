@@ -39,33 +39,60 @@ function App() {
     await new Promise(r => setTimeout(r, 0));
 
     const { frames, maindatas, soundframes, internals } = await parsefile(ab, async (iter) => {
-      setParsedFrames(iter.i);
+      setParsedFrames(iter.i + 1);
       if (true) {
         parsing = {
-          frames: [...parsing.frames, iter.frame], maindatas: [...parsing.maindatas], sounds: [...parsing.sounds], internals: [...parsing.internals], framerefs: [...parsing.framerefs, []]
+          frames: [...parsing.frames, iter.frame],
+          maindatas: [...parsing.maindatas],
+          sounds: [...parsing.sounds],
+          internals: [...parsing.internals],
+          framerefs: [...parsing.framerefs, []],
         };
         if (iter.maindata) {
           parsing.maindatas.push(iter.maindata);
 
-          for (let remain = iter.frame.sideinfo.main_data_end, i = parsing.frames.length - 2; 0 < remain && 0 <= i; i--) {
-            const datalen = parsing.frames[i].data.length;
-            // XXX: what if data including extra bytes after frame?
-            const size = Math.min(remain, datalen);
-            const offset = datalen - size;
-            parsing.framerefs[i].push({
-              main_i: i, // ugly
-              maindata: iter.maindata,
-              offset,
-              size,
-            });
-            remain -= size;
+          // post-updating referencing reservoir
+          // TODO: make more stateless... but hard.
+
+          let mainsize = iter.maindata.main_data.length - iter.maindata.ancillary_bytes.length;
+          if (0 < mainsize) {
+            // first, find beginning
+            let start = null;
+            let i = parsing.frames.length - 2;
+            let remain = iter.frame.sideinfo.main_data_end; // defined out of loop only for logging error...
+            for (; 0 < remain && 0 <= i; i--) {
+              const thatFrame = parsing.frames[i];
+              // XXX: what if data including extra bytes after frame?
+              const datalen = thatFrame.data.length;
+              const size = Math.min(remain, datalen);
+              start = thatFrame.head_side_size + datalen - size;
+              remain -= size;
+              if (remain <= 0) {
+                break;
+              }
+            }
+            if (i < 0) {
+              // this must not happened... (when this, not decoded at all)
+              throw new Error(`ref overruns: frame=${iter.i} remain=${remain}`);
+            }
+            // then, insert usage from there
+            for (; 0 < mainsize; i++) {
+              const thatFrame = parsing.frames[i];
+              // XXX: what if data including extra bytes after frame?
+              const datalen = thatFrame.data.length; // === thatFrame.totalsize - thatFrame.head_side_size
+              const offset = start !== null ? start : thatFrame.head_side_size;
+              const size = Math.min(mainsize, thatFrame.totalsize - offset);
+
+              parsing.framerefs[i].push({
+                main_i: iter.i,
+                maindata: iter.maindata,
+                offset,
+                size,
+              });
+              start = null;
+              mainsize -= size;
+            }
           }
-          parsing.framerefs[parsing.framerefs.length - 1].push({
-            main_i: iter.i - 1,
-            maindata: iter.maindata,
-            offset: iter.frame.head_side_size,
-            size: iter.maindata.main_data.length - iter.frame.sideinfo.main_data_end - iter.maindata.ancillary_bytes.length,
-          });
         }
         if (iter.soundframe) {
           iter.soundframe.forEach((sf, i) => (parsing.sounds[i] || (parsing.sounds[i] = [])).push(...sf));

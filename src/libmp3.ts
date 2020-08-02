@@ -1460,13 +1460,13 @@ export async function parsefile(ab: ArrayBuffer, callback: (iter: {
                     prevVVecQ = v_vec_q;
                     soundframes.push(sound);
                     internals.push(internal);
-                    const cont = await callback({ i: frames.length, frame, maindata: framedata, soundframe: sound, internal });
+                    const cont = await callback({ i: frames.length - 1, frame, maindata: framedata, soundframe: sound, internal });
                     if (!cont) {
                         break;
                     }
                 } else {
                     // not enough reservoir
-                    const cont = await callback({ i: frames.length, frame });
+                    const cont = await callback({ i: frames.length - 1, frame });
                     if (!cont) {
                         break;
                     }
@@ -1474,7 +1474,7 @@ export async function parsefile(ab: ArrayBuffer, callback: (iter: {
             } catch{
                 // so broken maindata or bug in our code; ignore for main_data decoding
 
-                const cont = await callback({ i: frames.length, frame });
+                const cont = await callback({ i: frames.length - 1, frame });
                 if (!cont) {
                     break;
                 }
