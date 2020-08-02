@@ -1411,7 +1411,7 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     };
 }
 
-export async function parsefile(ab: ArrayBuffer, callback: (iter: object) => Promise<void> = async () => { }, rawBandmask: boolean[] | null = null) {
+export async function parsefile(ab: ArrayBuffer, callback: (iter: { i: number, frame: PromiseType<ReturnType<typeof readframe>>, maindata?: any, soundframe?: any, internal?: any; }) => Promise<void> = async () => { }, rawBandmask: boolean[] | null = null) {
     const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));
     const frames = [];
