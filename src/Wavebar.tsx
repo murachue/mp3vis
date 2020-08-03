@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
-import { Zoombar, ZoombarArgs } from './Zoombar';
+import React from 'react';
+import { Zoombar, ZoombarUserArgs } from './Zoombar';
 
 export type WavebarArgs = {
     data: number[][];
-} & Omit<ZoombarArgs<number[][]>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>;
+} & ZoombarUserArgs<number[][]>;
 
 export function Wavebar({ data, ...props }: WavebarArgs) {
     const [peaks, setPeaks] = React.useState<typeof data>([]);
@@ -91,7 +91,7 @@ export function Wavebar({ data, ...props }: WavebarArgs) {
         zooming={zoomingWave && !!data[0]}
         data={data}
         drawWhole={drawWholeWave} drawZoom={drawZoomWave}
-        onZoom={(_offset, pressed) => zoomingWave != pressed && setZoomingWave(pressed)}
+        onZoom={(_offset, pressed) => zoomingWave !== pressed && setZoomingWave(pressed)}
         onResize={onResize}
     />);
 }

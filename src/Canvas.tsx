@@ -10,9 +10,10 @@ declare class ResizeObserver {
     disconnect(): void;
 }
 
-export type CanvasArgs<T> = {
+export type CanvasUserArgs<T> = Omit<CanvasArgs<T>, 'data' | 'onDraw'>;
+type CanvasArgs<T> = {
     data: T; // dummy prop to invoke render
-    onDraw: (ctx: CanvasRenderingContext2D) => void;
+    onDraw: (ctx: CanvasRenderingContext2D, data: T) => void;
     onResize?: (width: number, height: number) => void;
 } & JSX.IntrinsicElements["canvas"];
 
@@ -48,7 +49,7 @@ export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
         return () => {
             observer.disconnect();
         };
-    }, [size, data]); // specifying "data" to invoke onResize on "data" changed is ugly...
+    }, [refCanvas, size, onResize, data]); // specifying "data" to invoke onResize on "data" changed is ugly...
 
     React.useEffect(() => {
         const canvas = refCanvas.current;
@@ -61,8 +62,8 @@ export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
             return;
         }
 
-        onDraw(ctx);
-    });
+        onDraw(ctx, data);
+    }, [refCanvas, onDraw, data]);
 
     return (<canvas {...props} width="1" height="1" ref={refCanvas} />);
 }

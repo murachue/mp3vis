@@ -1,11 +1,11 @@
 import React from 'react';
-import { Zoombar, ZoombarArgs } from './Zoombar';
+import { Zoombar, ZoombarUserArgs } from './Zoombar';
 import { MyParsed } from './types';
 
 export type FramebarArgs = {
     data: Pick<MyParsed, 'frames' | 'framerefs'>;
     onSelectedFrame: (frame: number | null) => void;
-} & Omit<ZoombarArgs<Pick<MyParsed, 'frames' | 'framerefs'>>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>;
+} & ZoombarUserArgs<Pick<MyParsed, 'frames' | 'framerefs'>>;
 
 export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArgs) {
     const [zoomingFrame, setZoomingFrame] = React.useState(false);

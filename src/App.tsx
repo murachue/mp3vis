@@ -152,8 +152,8 @@ function App() {
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
           <p>drag here</p>
           <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
-          <Wavebar width={"100%"} height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
-          <Framebar width={"100%"} height={60} barHeight={30} zoomWidth={300} data={parsed} onSelectedFrame={setSelectedFrame} />
+          <Wavebar width="100%" height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
+          <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed} onSelectedFrame={setSelectedFrame} />
           <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><button disabled={!onDLSample} onClick={onDLSample?.[0]}>download raw sample</button></p>
           <p><button disabled={!onPlay} onClick={onPlay?.[0]}>play sample</button></p>

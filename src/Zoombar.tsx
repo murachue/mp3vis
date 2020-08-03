@@ -1,7 +1,8 @@
 import React from 'react';
-import { Canvas, CanvasArgs } from './Canvas';
+import { Canvas, CanvasUserArgs } from './Canvas';
 
-export type ZoombarArgs<T> = {
+export type ZoombarUserArgs<T> = Omit<ZoombarArgs<T>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>;
+type ZoombarArgs<T> = {
     width: string | number;
     height: string | number;
     barHeight: number;
@@ -11,14 +12,14 @@ export type ZoombarArgs<T> = {
     onZoom?: (offset: number | null, pressed: boolean) => void,
     zooming: boolean;
     data: T;
-} & Omit<CanvasArgs<T>, 'data' | 'onDraw'>;
+} & CanvasUserArgs<T>;
 
 export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
     const [pointer, setPointer] = React.useState<{ pos: { x: number, y: number; }; pressed: boolean; }>({ pos: { x: 0, y: 0 }, pressed: false });
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = (ctx: CanvasRenderingContext2D) => {
+    const onDraw = (ctx: CanvasRenderingContext2D, data: { data: T, pointer: typeof pointer; }) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);
@@ -28,7 +29,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         ctx.beginPath();
         ctx.rect(0, 0, cw + 1, barHeight + 1);
         ctx.clip();
-        drawWhole(ctx, cw, barHeight, data);
+        drawWhole(ctx, cw, barHeight, data.data);
         ctx.restore();
 
         if (zooming) {
@@ -40,7 +41,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
             ctx.beginPath();
             ctx.rect(0, 0, zoomWidth + 1, ch + 1);
             ctx.clip();
-            drawZoom(ctx, mx / cw, zoomWidth, ch, data);
+            drawZoom(ctx, mx / cw, zoomWidth, ch, data.data);
             ctx.restore();
         }
     };
@@ -98,7 +99,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     return (<Canvas
         {...props}
-        data={data}
+        data={{ data, pointer }}
         onDraw={onDraw}
         style={{ width, height }}
         onMouseOver={(e: React.MouseEvent<HTMLCanvasElement>) => { enterMove(e); props.onMouseOver?.(e); }}
