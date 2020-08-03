@@ -1,7 +1,11 @@
 import React, { useEffect } from 'react';
 import { Zoombar, ZoombarArgs } from './Zoombar';
 
-export function Wavebar({ data, ...props }: { data: number[][]; } & Omit<ZoombarArgs<number[][]>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>) {
+export type WavebarArgs = {
+    data: number[][];
+} & Omit<ZoombarArgs<number[][]>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>;
+
+export function Wavebar({ data, ...props }: WavebarArgs) {
     const [peaks, setPeaks] = React.useState<typeof data>([]);
     const [zoomingWave, setZoomingWave] = React.useState(false);
 
