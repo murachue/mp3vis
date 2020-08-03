@@ -156,7 +156,14 @@ function App() {
     */
   }
 
-  const onZoomFrame = (offset: number | null) => {
+  const onZoomFrame = (offset: number | null, pressed: boolean) => {
+    if (!!offset !== zoomingFrame) {
+      setZoomingFrame(!!offset);
+    }
+    if (pressed !== selectingFrame) {
+      setSelectingFrame(pressed);
+    }
+
     if (offset && selectingFrame) {
       const onew = 200;
       const pad = 20;
@@ -334,14 +341,12 @@ function App() {
             width={"100%"} height={100} barHeight={60} zoomWidth={300}
             drawWhole={drawWholeWave} drawZoom={drawZoomWave}
             zooming={zoomingWave && !!parsed.sounds[0]} data={parsed}
-            onPointerDown={() => setZoomingWave(true)} onPointerUp={() => setZoomingWave(false)}
+            onZoom={(_offset, pressed) => zoomingWave != pressed && setZoomingWave(pressed)}
           />
           <Zoombar width={"100%"} height={60} barHeight={30} zoomWidth={300}
             drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
-            zooming={zoomingFrame} data={{ ...parsed, selectedFrame }}
+            zooming={zoomingFrame} data={{ ...parsed, selectingFrame, selectedFrame }}
             onZoom={onZoomFrame}
-            onPointerOver={() => setZoomingFrame(true)} onPointerOut={() => setZoomingFrame(false)}
-            onPointerDown={() => setSelectingFrame(true)} onPointerUp={() => setSelectingFrame(false)}
           />
           <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><button disabled={!onDLSample} onClick={onDLSample?.[0]}>download raw sample</button></p>
