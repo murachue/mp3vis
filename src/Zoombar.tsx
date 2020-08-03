@@ -1,7 +1,7 @@
 import React from 'react';
-import { Canvas } from './Canvas';
+import { Canvas, CanvasArgs } from './Canvas';
 
-export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: {
+export type ZoombarArgs<T> = {
     width: string | number;
     height: string | number;
     barHeight: number;
@@ -11,7 +11,9 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
     onZoom?: (offset: number | null, pressed: boolean) => void,
     zooming: boolean;
     data: T;
-} & JSX.IntrinsicElements["canvas"]) {
+} & Omit<CanvasArgs<T>, 'data' | 'onDraw'>;
+
+export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
     const [pointer, setPointer] = React.useState<{ pos: { x: number, y: number; }; pressed: boolean; }>({ pos: { x: 0, y: 0 }, pressed: false });
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));

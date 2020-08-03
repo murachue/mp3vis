@@ -10,10 +10,13 @@ declare class ResizeObserver {
     disconnect(): void;
 }
 
-export function Canvas<T>({ data, onDraw, ...props }: {
+export type CanvasArgs<T> = {
     data: T; // dummy prop to invoke render
     onDraw: (ctx: CanvasRenderingContext2D) => void;
-} & JSX.IntrinsicElements["canvas"]) {
+    onResize?: (width: number, height: number) => void;
+} & JSX.IntrinsicElements["canvas"];
+
+export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
     const refCanvas = React.createRef<HTMLCanvasElement>();
 
     const [size, setSize] = React.useState<DOMRectReadOnly>();
@@ -25,21 +28,27 @@ export function Canvas<T>({ data, onDraw, ...props }: {
             return;
         }
 
+        const width = canvas.offsetWidth;
+        const height = canvas.offsetHeight;
+
         // https://stackoverflow.com/a/10214971
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        onResize?.(width, height);
 
         const observer = new ResizeObserver(entries => {
             const newRect = entries[0].contentRect;
             if (newRect.width !== size?.width || newRect.height !== size?.height) {
                 setSize(newRect);
+                onResize?.(newRect.width, newRect.height);
             }
         });
         observer.observe(canvas);
         return () => {
             observer.disconnect();
         };
-    }, [size]);
+    }, [size, data]); // specifying "data" to invoke onResize on "data" changed is ugly...
 
     React.useEffect(() => {
         const canvas = refCanvas.current;

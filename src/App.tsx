@@ -4,6 +4,7 @@ import { Zoombar } from './Zoombar';
 import { Checkband } from './Checkband';
 import { parsefile, PromiseType } from './libmp3';
 import { Dropbox } from './Dropbox';
+import { Wavebar } from './Wavebar';
 
 type MyParsed = Omit<PromiseType<ReturnType<typeof parsefile>>, "soundframes"> & {
   sounds: number[][];
@@ -27,7 +28,6 @@ function App() {
   const [onPlay, setOnPlay] = useState<[() => void] | null>(null);
   const [zoomingFrame, setZoomingFrame] = useState(false);
   const [selectingFrame, setSelectingFrame] = useState(false);
-  const [zoomingWave, setZoomingWave] = useState(false);
   const [abortable, setAbortable] = useState(false);
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
 
@@ -257,78 +257,6 @@ function App() {
     ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
   };
 
-  const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof parsed) => {
-    ctx.fillStyle = "#222";
-    ctx.globalAlpha = 1.0;
-    ctx.fillRect(0, 0, width, height);
-
-    if (0 < data.sounds.length) {
-      // FIXME: should do this on data set, not each draw!!!
-      const peaksPerCh = data.sounds.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
-        const from = Math.floor(ch.length * i / width);
-        const to = Math.min(from + 1, Math.floor(ch.length * (i + 1) / width));
-        const peak = ch.slice(from, to).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
-        return peak;
-      }));
-
-      ctx.globalAlpha = 0.5;
-
-      const drawPeakRange = (color: string, peaks: number[]) => {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(0, peaks[0]);
-        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
-        peaks.map((peak, x) => [peak, x]).reverse().forEach(([peak, x]) => ctx.lineTo(x, height / 2 + height / 2 * peak));
-        ctx.closePath();
-        ctx.fill();
-      };
-      const drawPeakLine = (color: string, peaks: number[]) => {
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(0, peaks[0]);
-        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, peaks[0]);
-        peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 + height / 2 * peak));
-        ctx.stroke();
-      };
-
-      drawPeakRange("#8f8", peaksPerCh[0]);
-      drawPeakLine("#4f4", peaksPerCh[0]);
-      if (peaksPerCh[1]) {
-        drawPeakRange("#88f", peaksPerCh[1]);
-        drawPeakLine("#44f", peaksPerCh[1]);
-      }
-    }
-  };
-  const drawZoomWave = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof parsed) => {
-    ctx.globalAlpha = 1.0;
-
-    ctx.fillStyle = "#222";
-    ctx.fillRect(0.5, 0.5, width, height);
-
-    const from = Math.floor((data.sounds[0].length - width) * offset);
-
-    // ctx.globalAlpha = 0.5;
-
-    const drawWave = (color: string, points: number[]) => {
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(1 + 0.5, points[0] * height / 2 + height / 2 + 1 + 0.5);
-      points.forEach((point, i) => {
-        ctx.lineTo(i + 1 + 0.5, point * height / 2 + height / 2 + 1 + 0.5);
-      });
-      ctx.stroke();
-    };
-    drawWave("#8f8", data.sounds[0].slice(from, from + width));
-    if (data.sounds[1]) {
-      drawWave("#88f", data.sounds[1].slice(from, from + width));
-    }
-
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
-  };
 
   return (
     <div>
@@ -337,12 +265,7 @@ function App() {
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
           <p>drag here</p>
           <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
-          <Zoombar
-            width={"100%"} height={100} barHeight={60} zoomWidth={300}
-            drawWhole={drawWholeWave} drawZoom={drawZoomWave}
-            zooming={zoomingWave && !!parsed.sounds[0]} data={parsed}
-            onZoom={(_offset, pressed) => zoomingWave != pressed && setZoomingWave(pressed)}
-          />
+          <Wavebar width={"100%"} height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
           <Zoombar width={"100%"} height={60} barHeight={30} zoomWidth={300}
             drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
             zooming={zoomingFrame} data={{ ...parsed, selectingFrame, selectedFrame }}
