@@ -19,7 +19,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = (ctx: CanvasRenderingContext2D, data: { data: T, pointer: typeof pointer; }) => {
+    const onDraw = (ctx: CanvasRenderingContext2D) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);
@@ -29,7 +29,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         ctx.beginPath();
         ctx.rect(0, 0, cw + 1, barHeight + 1);
         ctx.clip();
-        drawWhole(ctx, cw, barHeight, data.data);
+        drawWhole(ctx, cw, barHeight, data);
         ctx.restore();
 
         if (zooming) {
@@ -41,7 +41,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
             ctx.beginPath();
             ctx.rect(0, 0, zoomWidth + 1, ch + 1);
             ctx.clip();
-            drawZoom(ctx, mx / cw, zoomWidth, ch, data.data);
+            drawZoom(ctx, mx / cw, zoomWidth, ch, data);
             ctx.restore();
         }
     };
@@ -99,7 +99,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     return (<Canvas
         {...props}
-        data={{ data, pointer }}
+        data={data}
         onDraw={onDraw}
         style={{ width, height }}
         onMouseOver={(e: React.MouseEvent<HTMLCanvasElement>) => { enterMove(e); props.onMouseOver?.(e); }}
