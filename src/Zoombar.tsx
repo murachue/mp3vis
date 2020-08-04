@@ -19,7 +19,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = (ctx: CanvasRenderingContext2D) => {
+    const onDraw = (ctx: CanvasRenderingContext2D, data: T) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);

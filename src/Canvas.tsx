@@ -13,7 +13,7 @@ declare class ResizeObserver {
 export type CanvasUserArgs<T> = Omit<CanvasArgs<T>, 'data' | 'onDraw'>;
 type CanvasArgs<T> = {
     data: T; // dummy prop to invoke render
-    onDraw: (ctx: CanvasRenderingContext2D) => void;
+    onDraw: (ctx: CanvasRenderingContext2D, data: T) => void;
     onResize?: (width: number, height: number) => void;
 } & JSX.IntrinsicElements["canvas"];
 
@@ -62,7 +62,7 @@ export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
             return;
         }
 
-        onDraw(ctx);
+        onDraw(ctx, data);
     });
 
     return (<canvas {...props} width="1" height="1" ref={refCanvas} />);
