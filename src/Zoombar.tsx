@@ -27,7 +27,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = React.useCallback((ctx: CanvasRenderingContext2D, data: { data: T, pointer: PointerState; }) => {
+    const onDraw = (ctx: CanvasRenderingContext2D, data: { data: T, pointer: PointerState; }) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);
@@ -52,7 +52,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
             drawZoom(ctx, mx / cw, zoomWidth, ch, data.data);
             ctx.restore();
         }
-    }, [barHeight, zooming, zoomWidth, drawWhole, drawZoom]);
+    };
 
     // const enterMove = function (e: React.MouseEvent<HTMLDivElement>) {
     //     const canvas = refCanvas.current;
