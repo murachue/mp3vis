@@ -18,9 +18,9 @@ type CanvasArgs<T> = {
 } & JSX.IntrinsicElements["canvas"];
 
 export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
-    const refCanvas = React.createRef<HTMLCanvasElement>();
+    const refCanvas = React.useRef<HTMLCanvasElement>(null);
 
-    const [size, setSize] = React.useState<DOMRectReadOnly>();
+    const [size, setSize] = React.useState({ width: 0, height: 0 });
 
     React.useEffect(() => {
         const canvas = refCanvas.current;
@@ -36,20 +36,24 @@ export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
         canvas.width = width;
         canvas.height = height;
 
-        onResize?.(width, height);
+        const sized = (width: number, height: number) => {
+            if (width !== size?.width || height !== size?.height) {
+                setSize({ width, height });
+                onResize?.(width, height);
+            }
+        };
+
+        sized(width, height);
 
         const observer = new ResizeObserver(entries => {
             const newRect = entries[0].contentRect;
-            if (newRect.width !== size?.width || newRect.height !== size?.height) {
-                setSize(newRect);
-                onResize?.(newRect.width, newRect.height);
-            }
+            sized(newRect.width, newRect.height);
         });
         observer.observe(canvas);
         return () => {
             observer.disconnect();
         };
-    }, [size, data]); // specifying "data" to invoke onResize on "data" changed is ugly...
+    }, [onResize, size]);
 
     React.useEffect(() => {
         const canvas = refCanvas.current;

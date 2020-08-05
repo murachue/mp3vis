@@ -7,7 +7,7 @@ export type FramebarArgs = {
     onSelectedFrame: (frame: number | null) => void;
 } & ZoombarUserArgs<Pick<MyParsed, 'frames' | 'framerefs'>>;
 
-export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArgs) {
+export function Framebar({ data, onSelectedFrame, ...props }: FramebarArgs) {
     const [zoomingFrame, setZoomingFrame] = React.useState(false);
     const [selectingFrame, setSelectingFrame] = React.useState(false);
     const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
@@ -24,7 +24,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
             const onew = 200;
             const pad = 20;
             const interval = onew + pad;
-            const newFrame = Math.floor((pdata.frames.length - onew / interval) * offset + 0.5);
+            const newFrame = Math.floor((data.frames.length - onew / interval) * offset + 0.5);
             if (newFrame !== selectedFrame) {
                 setSelectedFrame(newFrame);
                 onSelectedFrame(newFrame);
@@ -32,7 +32,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
         }
     };
 
-    const drawFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof pdata, i: number) => {
+    const drawFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: FramebarArgs["data"], i: number) => {
         const frame = data.frames[i];
         const xscale = width / frame.totalsize;
         // whole (at last becomes empty)
@@ -45,7 +45,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
         ctx.fillStyle = "#fdf";
         ctx.fillRect(4 * xscale, 0, (frame.head_side_size - 4) * xscale, height);
         // maindatas
-        const rainbow = ["#afa", "#ffa", "#fca", "#faa", "#faf", "#aaf"]; // at most 3 is enough in spec, but more in the wild.
+        const rainbow = ["#afa", "#ffa", "#fca", "#f66", "#f6f", "#66f"]; // at most 3 is enough in spec, but more in the wild.
         for (const ref of data.framerefs[i]) {
             const nback = ref.main_i - i;
             const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
@@ -54,7 +54,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
         }
     };
 
-    const drawWholeFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: typeof pdata & { selectedFrame: typeof selectedFrame; }) => {
+    const drawWholeFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: FramebarArgs["data"] & { selectedFrame: typeof selectedFrame; }) => {
         ctx.fillStyle = "gray";
         ctx.fillRect(0, 0, width, height);
 
@@ -81,7 +81,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
         }
     };
 
-    const drawZoomFrame = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: typeof pdata & { selectedFrame: typeof selectedFrame; }) => {
+    const drawZoomFrame = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: FramebarArgs["data"] & { selectedFrame: typeof selectedFrame; }) => {
         ctx.fillStyle = "gray";
         ctx.fillRect(0.5, 0.5, width, height);
 
@@ -120,7 +120,7 @@ export function Framebar({ data: pdata, onSelectedFrame, ...props }: FramebarArg
     return (<Zoombar
         {...props}
         drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
-        zooming={zoomingFrame} data={{ ...pdata, selectedFrame }}
+        zooming={zoomingFrame} data={{ ...data, selectedFrame }}
         onZoom={onZoomFrame}
     />);
 }

@@ -14,12 +14,20 @@ type ZoombarArgs<T> = {
     data: T;
 } & CanvasUserArgs<T>;
 
+type PointerState = {
+    pos: {
+        x: number;
+        y: number;
+    };
+    pressed: boolean;
+};
+
 export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
-    const [pointer, setPointer] = React.useState<{ pos: { x: number, y: number; }; pressed: boolean; }>({ pos: { x: 0, y: 0 }, pressed: false });
+    const [pointer, setPointer] = React.useState<PointerState>({ pos: { x: 0, y: 0 }, pressed: false });
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = (ctx: CanvasRenderingContext2D, data: T) => {
+    const onDraw = React.useCallback((ctx: CanvasRenderingContext2D, data: { data: T, pointer: PointerState; }) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);
@@ -29,11 +37,11 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         ctx.beginPath();
         ctx.rect(0, 0, cw + 1, barHeight + 1);
         ctx.clip();
-        drawWhole(ctx, cw, barHeight, data);
+        drawWhole(ctx, cw, barHeight, data.data);
         ctx.restore();
 
         if (zooming) {
-            const mx = getOffset(pointer.pos.x, cw);
+            const mx = getOffset(data.pointer.pos.x, cw);
             const wx = Math.max(0, Math.min(mx - zoomWidth / 2, cw - zoomWidth));
 
             ctx.save();
@@ -41,10 +49,10 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
             ctx.beginPath();
             ctx.rect(0, 0, zoomWidth + 1, ch + 1);
             ctx.clip();
-            drawZoom(ctx, mx / cw, zoomWidth, ch, data);
+            drawZoom(ctx, mx / cw, zoomWidth, ch, data.data);
             ctx.restore();
         }
-    };
+    }, [barHeight, zooming, zoomWidth, drawWhole, drawZoom]);
 
     // const enterMove = function (e: React.MouseEvent<HTMLDivElement>) {
     //     const canvas = refCanvas.current;
@@ -99,7 +107,7 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     return (<Canvas
         {...props}
-        data={data}
+        data={{ data, pointer }}
         onDraw={onDraw}
         style={{ width, height }}
         onMouseOver={(e: React.MouseEvent<HTMLCanvasElement>) => { enterMove(e); props.onMouseOver?.(e); }}

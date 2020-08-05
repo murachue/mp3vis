@@ -1,12 +1,13 @@
 import React from 'react';
 import { Zoombar, ZoombarUserArgs } from './Zoombar';
+import { memoized } from './memoized';
 
 export type WavebarArgs = {
     data: number[][];
 } & ZoombarUserArgs<number[][]>;
 
 export function Wavebar({ data, ...props }: WavebarArgs) {
-    const [peaks, setPeaks] = React.useState<typeof data>([]);
+    const peaksMemoRef = React.useRef();
     const [zoomingWave, setZoomingWave] = React.useState(false);
 
     const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: number[][]) => {
@@ -14,9 +15,16 @@ export function Wavebar({ data, ...props }: WavebarArgs) {
         ctx.globalAlpha = 1.0;
         ctx.fillRect(0, 0, width, height);
 
-        if (peaks.length < 1) {
+        if (data.length < 1) {
             return;
         }
+
+        const peaks = memoized(peaksMemoRef, () => data.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
+            const from = Math.floor(ch.length * i / width);
+            const to = Math.min(from + 1, Math.floor(ch.length * (i + 1) / width));
+            const peak = ch.slice(from, to).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
+            return peak;
+        })), [width, data]);
 
         ctx.globalAlpha = 0.5;
 
@@ -77,21 +85,11 @@ export function Wavebar({ data, ...props }: WavebarArgs) {
         ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
     };
 
-    const onResize = (width: number, height: number) => {
-        setPeaks(data.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
-            const from = Math.floor(ch.length * i / width);
-            const to = Math.min(from + 1, Math.floor(ch.length * (i + 1) / width));
-            const peak = ch.slice(from, to).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
-            return peak;
-        })));
-    };
-
     return (<Zoombar
         {...props}
         zooming={zoomingWave && !!data[0]}
         data={data}
         drawWhole={drawWholeWave} drawZoom={drawZoomWave}
         onZoom={(_offset, pressed) => zoomingWave !== pressed && setZoomingWave(pressed)}
-        onResize={onResize}
     />);
 }
