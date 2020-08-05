@@ -117,6 +117,10 @@ export function Framebar({ data, onSelectedFrame, ...props }: FramebarArgs) {
         ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
     };
 
+    if (selectedFrame !== null && data.frames.length <= selectedFrame) {
+        setSelectedFrame(null);
+    }
+
     return (<Zoombar
         {...props}
         drawWhole={drawWholeFrame} drawZoom={drawZoomFrame}
