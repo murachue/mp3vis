@@ -4,14 +4,12 @@ import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_i
 import { times, range } from 'lodash-es';
 import { ParsedFrame } from './types';
 
-type Data = ParsedFrame | null;
-
 type ScalefacFreqGraphArgs = {
-    data: Data;
-} & CanvasUserArgs<Data>;
+    data: ParsedFrame | null;
+} & CanvasUserArgs<ParsedFrame | null>;
 
 export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
-    const onDraw = (ctx: CanvasRenderingContext2D, data: Data) => {
+    const onDraw = (ctx: CanvasRenderingContext2D, data: ParsedFrame | null) => {
         ctx.fillStyle = "white";
         const cw = ctx.canvas.width;
         const ch = ctx.canvas.height;
