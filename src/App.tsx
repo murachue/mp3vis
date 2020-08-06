@@ -18,6 +18,11 @@ function App() {
   const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
 
   async function parse(ab: ArrayBuffer) {
+    if (abortable) {
+      aborted.current = true;
+      await new Promise(r => setTimeout(r, 0));
+    }
+
     setParsedFrames(0);
     setParsedMaindatas(null);
     let parsing: typeof parsed = { sounds: [], parsedFrames: [] };
