@@ -365,23 +365,20 @@ const bigvalueHufftabs = [
     { table: bigvalueHufftab24, linbits: 13 },
 ] as const;
 
-// 0..20+1+end(long) and 0..11+1+end(short) subbands. used for region_address to subbands, and requantize.
+// used for region_address to subbands, and requantize.
 // tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
 // tips: they have extra 1 band than each scalefactors...
-// TODO: this does not need to object.
-const scalefactor_band_indices = {
-    44100: {
-        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
-        short: [0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192],
-    },
-    48000: {
-        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576],
-        short: [0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192],
-    },
-    32000: {
-        long: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576],
-        short: [0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192],
-    },
+// 0..20+1+end subbands for long.
+export const scalefactor_band_indices_long = {
+    44100: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576],
+    48000: [0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576],
+    32000: [0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576],
+} as const;
+// 0..11+1+end subbands for short.
+export const scalefactor_band_indices_short = {
+    44100: [0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192],
+    48000: [0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192],
+    32000: [0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192],
 } as const;
 
 // if this hits unexpected EOF, readbits throws.
@@ -455,12 +452,12 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
     // note: all long[8] is 36.
-    const rawregion1start = scalefactor_band_indices[sampfreq].long[is_shortblock ? 8 : (sideinfo.region_address1 + 1)];
+    const rawregion1start = scalefactor_band_indices_long[sampfreq][is_shortblock ? 8 : (sideinfo.region_address1 + 1)];
     const region1start = Math.min(bigvalues, rawregion1start); // region1start also may overruns
     // note: rawregion2start naturally overruns to indicate "no region2"
     // note: mp3decoder(haskell) says "r1len = min ((bigvalues*2)-(min (bigvalues*2) 36)) 540" about 576. that is len, this is start.
     // note: all long[22] is 576.
-    const rawregion2start = scalefactor_band_indices[sampfreq].long[is_shortblock ? 22 : (sideinfo.region_address1 + sideinfo.region_address2 + 2)];
+    const rawregion2start = scalefactor_band_indices_long[sampfreq][is_shortblock ? 22 : (sideinfo.region_address1 + sideinfo.region_address2 + 2)];
     const region2start = Math.min(bigvalues, rawregion2start);
 
     const regionlens = [
@@ -714,8 +711,8 @@ const array_cons_diff = (arr: readonly number[]) => {
 const object_values_map = <K extends string | number, V, VA>(obj: Record<K, V>, fn: (value: V) => VA): Record<K, VA> => {
     return Object.assign({}, ...Object.entries(obj as { [k: string]: V; }).map(([k, v]) => ({ [k]: fn(v) })));
 };
-const subbands_long_lengths = object_values_map(scalefactor_band_indices, v => array_cons_diff(v.long));
-const subbands_short_lengths = object_values_map(scalefactor_band_indices, v => array_cons_diff(v.short));
+const subbands_long_lengths = object_values_map(scalefactor_band_indices_long, array_cons_diff);
+const subbands_short_lengths = object_values_map(scalefactor_band_indices_short, array_cons_diff);
 // processed for easily zipped with "is"
 const pretab_i = object_values_map(subbands_long_lengths, v => v.flatMap((len, i) => Array(len).fill(pretab[i])) as number[]);
 const pretab_zero_i = Array(576).fill(0);
@@ -755,7 +752,7 @@ function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, sc
     const scalefac_i = subbands_long_lengths[sampfreq].slice(0, till).flatMap((len, i) => Array(len).fill(scalefac[i])) as number[];
 
     // XXX: we should only do 0...zero_part_begin for speed optimization.
-    return is.slice(0, scalefactor_band_indices[sampfreq].long[till]).map((rawsample, i) => {
+    return is.slice(0, scalefactor_band_indices_long[sampfreq][till]).map((rawsample, i) => {
         return requantizeSample(rawsample, scale_step, scalefac_i[i], pretab_i_freq[i], global_gain, 0);
     });
 }
@@ -768,7 +765,7 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
 
     // XXX: we should only do 0...zero_part_begin for speed optimization.
     const requantized = [];
-    let i = scalefactor_band_indices[sampfreq].short[from] * 3;
+    let i = scalefactor_band_indices_short[sampfreq][from] * 3;
     for (const band of range(from, 13)) {
         for (const win of times(3)) {
             for (const band_i of times(band_len[band])) {  // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -853,7 +850,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
             // XXX: we should only do ...zero_part_begin for speed optimization.
             // do not touch for long area (long_band[<8] = short_band[<3] = samples[<36]) if switch_point.
             const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
-            const band_short_indices = scalefactor_band_indices[sampfreq].short;
+            const band_short_indices = scalefactor_band_indices_short[sampfreq];
             const band_short_lengths = subbands_short_lengths[sampfreq];
             const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
             const reordered = requantized_gr_ch.slice(0, band_short_indices[bandFrom]); // this is copy longs if switch_point, else just [].
@@ -907,7 +904,7 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
     const scalefac_l = scalefac.scalefac_l.concat([0]);
 
     for (const band of times(till)) {
-        const index = scalefactor_band_indices[sampfreq].long[band];
+        const index = scalefactor_band_indices_long[sampfreq][band];
         const len = subbands_long_lengths[sampfreq][band];
 
         // using channel1(right) zero_part_begin to identify intensity-stereo band or not.
@@ -953,7 +950,7 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
     const scalefac_s = scalefac.scalefac_s.concat([[0, 0, 0]]);
 
     for (const band of range(from, 13)) {
-        const index = scalefactor_band_indices[sampfreq].short[band] * 3;
+        const index = scalefactor_band_indices_short[sampfreq][band] * 3;
         const len = subbands_short_lengths[sampfreq][band];
 
         // using channel1(right) zero_part_begin to intensity-stereo band or not.
