@@ -151,6 +151,14 @@ function App() {
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
           <p>drag here</p>
           <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted.current = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
+          <p>{(() => {
+            const firstFrame = parsed.parsedFrames[0];
+            if (!firstFrame) {
+              return '';
+            }
+            const hdr = firstFrame.frame.header;
+            return <>{sampling_frequencies[hdr.sampling_frequency]} Hz {hdr.mode === 3 ? 1 : 2} ch</>;
+          })()}</p>
           <Wavebar width="100%" height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
           <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={selectedFrame === null ? null : parsed.parsedFrames[selectedFrame] || null} />
           <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} onSelectedFrame={setSelectedFrame} />
