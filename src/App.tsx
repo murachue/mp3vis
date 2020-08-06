@@ -13,8 +13,6 @@ function App() {
   const [parsed, setParsed] = React.useState<MyParsed>({ sounds: [], parsedFrames: [], });
   const [parsedFrames, setParsedFrames] = React.useState<number | null>(null);
   const [parsedMaindatas, setParsedMaindatas] = React.useState<number | null>(null);
-  const [onDLSample, setOnDLSample] = React.useState<[() => void] | null>(null);
-  const [onPlay, setOnPlay] = React.useState<[() => void] | null>(null);
   const [abortable, setAbortable] = React.useState(false);
   const aborted = React.useRef(false); // to be rendered but must not changed between renders (to access older instance referenced by parsefile())
   const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
@@ -100,34 +98,6 @@ function App() {
     setAbortable(false);
     await new Promise(r => setTimeout(r, 0));
 
-    setOnDLSample([() => {
-      // transposing and integerify
-      const s16pcm = new Int16Array(Array(parsing.sounds[0].length).fill(0).flatMap((_, i) => parsing.sounds.map(ch => Math.min(Math.max(ch[i], -1), 1) * 32767)));
-      const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
-      const tmpa = document.createElement("a");
-      document.body.appendChild(tmpa);
-      // tmpa.style = "display: none;";
-      tmpa.href = url;
-      tmpa.click();
-      document.body.removeChild(tmpa);
-      URL.revokeObjectURL(url);
-    }]);
-
-    setOnPlay([() => {
-      const ctx = new AudioContext();
-      const buf = ctx.createBuffer(parsing.sounds.length, parsing.sounds[0].length, sampling_frequencies[parsing.parsedFrames[0].frame.header.sampling_frequency]);
-      Array(parsing.sounds.length).fill(0).forEach((_, ch) => {
-        const chbuf = buf.getChannelData(ch);
-        parsing.sounds[ch].forEach((e, i) => {
-          chbuf[i] = e;
-        });
-      });
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start();
-    }]);
-
     /*
     const internals_box = document.getElementById("internals");
     internals_box.innerText = internals.map(e => JSON.stringify(e) + "\n").join("");
@@ -141,6 +111,34 @@ function App() {
     */
   }
 
+  const onDLSample = () => {
+    // transposing and integerify
+    const s16pcm = new Int16Array(Array(parsed.sounds[0].length).fill(0).flatMap((_, i) => parsed.sounds.map(ch => Math.min(Math.max(ch[i], -1), 1) * 32767)));
+    const url = URL.createObjectURL(new Blob([s16pcm.buffer], { type: "application/octet-stream" }));
+    const tmpa = document.createElement("a");
+    document.body.appendChild(tmpa);
+    // tmpa.style = "display: none;";
+    tmpa.href = url;
+    tmpa.click();
+    document.body.removeChild(tmpa);
+    URL.revokeObjectURL(url);
+  };
+
+  const onPlay = () => {
+    const ctx = new AudioContext();
+    const buf = ctx.createBuffer(parsed.sounds.length, parsed.sounds[0].length, sampling_frequencies[parsed.parsedFrames[0].frame.header.sampling_frequency]);
+    Array(parsed.sounds.length).fill(0).forEach((_, ch) => {
+      const chbuf = buf.getChannelData(ch);
+      parsed.sounds[ch].forEach((e, i) => {
+        chbuf[i] = e;
+      });
+    });
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+  };
+
   return (
     <div>
       <p>hello</p>
@@ -152,8 +150,8 @@ function App() {
           <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={selectedFrame ? parsed.parsedFrames[selectedFrame] || null : null} />
           <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} onSelectedFrame={setSelectedFrame} />
           <Checkband checks={bandmask} onChanged={setBandmask} />
-          <p><button disabled={!onDLSample} onClick={onDLSample?.[0]}>download raw sample</button></p>
-          <p><button disabled={!onPlay} onClick={onPlay?.[0]}>play sample</button></p>
+          <p><button disabled={parsed.parsedFrames.length < 1} onClick={onDLSample}>download raw sample</button></p>
+          <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>
