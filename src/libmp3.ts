@@ -119,6 +119,7 @@ async function readheader(r: U8BitReader) {
         emphasis,
     };
 }
+export type Header = PromiseType<ReturnType<typeof readheader>>;
 
 async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType<typeof readheader>>) {
     const is_mono = header.mode === 3;
@@ -243,8 +244,9 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
         channel,
     };
 }
+export type Sideinfo = PromiseType<ReturnType<typeof readlayer3sideinfo>>;
 
-const sampling_frequencies = [44100, 48000, 32000] as const; // [3] is reserved.
+export const sampling_frequencies = [44100, 48000, 32000] as const; // [3] is reserved.
 // TODO: how to measure framebytes in free-format? try to read next sync and then read?? difficult on buffering...
 function frame_bytes(header: PromiseType<ReturnType<typeof readheader>>) {
     const bitrate_kbps = layer3_bitrate_kbps[header.bitrate_index - 1];
@@ -253,7 +255,7 @@ function frame_bytes(header: PromiseType<ReturnType<typeof readheader>>) {
     return Math.floor(144 * bitrate_kbps * 1000 / sampfreq) + header.padding_bit;
 }
 
-const layer3_bitrate_kbps = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+export const layer3_bitrate_kbps = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
 async function readframe(r: U8BitReader) {
     const offset = r.tell() / 8;
     const header = await readheader(r);
@@ -282,8 +284,7 @@ async function readframe(r: U8BitReader) {
         totalsize,
     };
 }
-
-type FrameType = PromiseType<ReturnType<typeof readframe>>;
+export type Frame = PromiseType<ReturnType<typeof readframe>>;
 
 // https://stackoverflow.com/a/35633935
 function concat<T extends Uint8Array>(a: T, b: T) {
@@ -294,7 +295,7 @@ function concat<T extends Uint8Array>(a: T, b: T) {
 }
 
 // note: this will return more than enough on tail.
-function get_main_data(prevframes: FrameType[], frame: FrameType) {
+function get_main_data(prevframes: Frame[], frame: Frame) {
     // ugly but can't flatMap to Uint8Array...
     const reservoir = prevframes.map(f => f.data).reduce((p, c) => concat(p, c), new Uint8Array());
     if (reservoir.length < frame.sideinfo.main_data_end) {
@@ -431,7 +432,7 @@ async function readhuffcount1(r: U8BitReader, tab: readonly any[]) {
 //     |------part3_length(huffman bits)------|       |
 //     |---------big_value*2---------|        |       |
 // [1] | region0 | region1 | region2 | count1 | rzero | [576]
-async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: number, gr: number, ch: number) {
+async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, gr: number, ch: number) {
     if (part3_length <= 0) {
         return {
             is: Array(576).fill(0),
@@ -532,9 +533,9 @@ async function readhuffman(r: U8BitReader, frame: FrameType, part3_length: numbe
 }
 
 // ISO 11172-3 2.4.2.7 scalefac_compress
-const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
+export const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
 
-async function unpackframe(prevframes: FrameType[], frame: FrameType) {
+async function unpackframe(prevframes: Frame[], frame: Frame) {
     const main_data = get_main_data(prevframes, frame);
     if (!main_data) {
         // not enough reservoir (started in middle of stream?), can't decode
@@ -695,8 +696,7 @@ async function unpackframe(prevframes: FrameType[], frame: FrameType) {
         ancillary_bytes, // some of this are next or next-next frame's main_data.
     };
 }
-
-type MaindataType = NonNullable<PromiseType<ReturnType<typeof unpackframe>>>;
+export type Maindata = NonNullable<PromiseType<ReturnType<typeof unpackframe>>>;
 
 // pretab: "shortcut" to scalefactor. this can be used to make finally encoded scalefac smaller on higher freq band.
 // only for long blocks, in subbands.
@@ -739,8 +739,8 @@ function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: numb
     return gained;
 }
 
-type SideinfoOfOneBlock = FrameType["sideinfo"]["channel"][number]["granule"][number];
-type MaindataOfOneBlock = MaindataType["granule"][number]["channel"][number];
+export type SideinfoOfOneBlock = Frame["sideinfo"]["channel"][number]["granule"][number];
+export type MaindataOfOneBlock = Maindata["granule"][number]["channel"][number];
 // XXX: arguments are too complicated
 function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, scalefac_l: number[], is: number[], till: number) {
     // pretab not required for mixed-long, but it is 0 till "till", so it is redundant but ok.
@@ -778,7 +778,7 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
     }
     return requantized;
 }
-function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
+function requantizeOne(frame: Frame, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
     const scale_step = sideinfo_gr_ch.scalefac_scale ? 1 : 0.5; // 0=sqrt2 1=2
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const is = maindata_gr_ch.is.is;
@@ -802,7 +802,7 @@ function requantizeOne(frame: FrameType, sideinfo_gr_ch: SideinfoOfOneBlock, mai
     }
 }
 
-function requantize(frame: FrameType, maindata: MaindataType) {
+function requantize(frame: Frame, maindata: Maindata) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -822,10 +822,11 @@ function requantize(frame: FrameType, maindata: MaindataType) {
         granule,
     };
 }
+export type Requantized = ReturnType<typeof requantize>;
 
 // TODO: reorder short blocks just for make intensity-stereo processing easy???
 //       but intensity-stereo processing seems also wrong...?????
-function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
+function reorder(frame: Frame, requantized: ReturnType<typeof requantize>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -872,6 +873,7 @@ function reorder(frame: FrameType, requantized: ReturnType<typeof requantize>) {
         granule,
     };
 }
+export type Reordered = ReturnType<typeof reorder>;
 
 function intensityRatio(scalefac: number) {
     if (scalefac === 7) {
@@ -891,7 +893,7 @@ function intensityRatio(scalefac: number) {
     }
 }
 
-function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], till: number) {
+function intensityLongTill(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][], till: number) {
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
@@ -937,7 +939,7 @@ function intensityLongTill(gr: number, frame: FrameType, maindata_gr: MaindataTy
 
 // note: return is from "from", not from "0", to make easier to concat() later.
 // note: Lagerstrom MP3 Thesis's intensity stereo short code has a bug: not multiplying but just assigned...
-function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][], from: number) {
+function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][], from: number) {
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
     const processed: number[][] = [[], []];
 
@@ -986,7 +988,7 @@ function intensityShortFrom(gr: number, frame: FrameType, maindata_gr: MaindataT
 }
 
 // Intensity Stereo processing is complecated because of different factors for long and short * 3...
-function intensitystereo(gr: number, frame: FrameType, maindata_gr: MaindataType["granule"][number], stereosamples: number[][]) {
+function intensitystereo(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][]) {
     const type = maindata_gr.channel[0].scalefac.type;
     switch (type) {
         case "long": { // sideinfo.block_type !== 2
@@ -1005,7 +1007,7 @@ function intensitystereo(gr: number, frame: FrameType, maindata_gr: MaindataType
     }
 }
 
-function jointstereo(frame: FrameType, maindata: MaindataType, reordered: ReturnType<typeof reorder>) {
+function jointstereo(frame: Frame, maindata: Maindata, reordered: ReturnType<typeof reorder>) {
     if (frame.header.mode !== 1 || frame.header.mode_extension === 0) {
         // not joint-stereo or both MS and IS are NOT used. do nothing.
         return reordered;
@@ -1046,12 +1048,13 @@ function jointstereo(frame: FrameType, maindata: MaindataType, reordered: Return
         granule,
     };
 }
+export type Stereoed = ReturnType<typeof jointstereo>;
 
 const antiAliasCoeffs = [-0.6, -0.535, -0.33, -0.185, -0.095, -0.041, -0.0142, -0.0037];
 // ??? magic!
 const antiAliasS = antiAliasCoeffs.map(coeff => 1 / Math.sqrt(1 + coeff * coeff)); // Signal?
 const antiAliasA = antiAliasCoeffs.map(coeff => coeff / Math.sqrt(1 + coeff * coeff)); // Alias?
-function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
+function antialias(frame: Frame, stereoed: ReturnType<typeof jointstereo>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -1092,6 +1095,7 @@ function antialias(frame: FrameType, stereoed: ReturnType<typeof jointstereo>) {
         granule,
     };
 }
+export type Antialised = ReturnType<typeof antialias>;
 
 function imdct(src: number[]) {
     const n_half = src.length;
@@ -1150,7 +1154,7 @@ type SubbandsType = {
     }[];
 };
 
-function hybridsynth(frame: FrameType, rawprevtail: SubbandsType | null, antialiased: ReturnType<typeof antialias>) {
+function hybridsynth(frame: Frame, rawprevtail: SubbandsType | null, antialiased: ReturnType<typeof antialias>) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
     let prevtail = rawprevtail || { channel: times(nchans).map(_ => ({ subband: times(32).map(_ => Array(18).fill(0) as number[]) })) };
@@ -1194,6 +1198,7 @@ function hybridsynth(frame: FrameType, rawprevtail: SubbandsType | null, antiali
         prevtail,
     };
 }
+export type Hybridsynthed = ReturnType<typeof hybridsynth>;
 
 function freqinv(hybridsynthed: { granule: ReturnType<typeof hybridsynth>["granule"]; }) {
     return {
@@ -1208,6 +1213,7 @@ function freqinv(hybridsynthed: { granule: ReturnType<typeof hybridsynth>["granu
         })),
     };
 }
+export type Freqinved = ReturnType<typeof freqinv>;
 
 // magical table D[]...
 // its exact expr is unknown as of 2020-07-25. https://staff.fnwi.uva.nl/t.h.koornwinder/art/misc/hemker.pdf
@@ -1349,7 +1355,7 @@ const synth_filter = times(64, i => times(32, j => Math.cos((16 + i) * (2 * j + 
 type VVecQType = {
     channel: number[][][];
 };
-function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freqinved: ReturnType<typeof freqinv>, bandmask: boolean[]) {
+function subbandsynth(frame: Frame, raw_prev_v_vec_q: VVecQType | null, freqinved: ReturnType<typeof freqinv>, bandmask: boolean[]) {
     const is_mono = frame.header.mode === 3;
     const nchans = is_mono ? 1 : 2;
 
@@ -1388,8 +1394,9 @@ function subbandsynth(frame: FrameType, raw_prev_v_vec_q: VVecQType | null, freq
         v_vec_q: { channel: v_vec_q_chs },
     };
 }
+export type Subbandsynthed = ReturnType<typeof subbandsynth>["channel"];
 
-function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: FrameType, maindata: MaindataType, bandmask: boolean[]) {
+function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | null, frame: Frame, maindata: Maindata, bandmask: boolean[]) {
     // requantize, reorder and stereo, in "scalefactor band" world...
     const requantized = requantize(frame, maindata);
     const reordered = reorder(frame, requantized);
@@ -1412,13 +1419,14 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
         internal: { requantized, reordered, stereoed, antialiased, hysynthed_timedom, freqinved, sbsynthed, },
     };
 }
+export type Internal = ReturnType<typeof decodeframe>["internal"];
 
 export async function parsefile(ab: ArrayBuffer, callback: (iter: {
     i: number,
-    frame: PromiseType<ReturnType<typeof readframe>>,
-    maindata?: PromiseType<ReturnType<typeof unpackframe>>,
-    soundframe?: ReturnType<typeof decodeframe>["channel"],
-    internal?: ReturnType<typeof decodeframe>["internal"];
+    frame: Frame,
+    maindata?: Maindata,
+    soundframe?: Subbandsynthed,
+    internal?: Internal;
 }) => Promise<boolean> = async () => true, rawBandmask: boolean[] | null = null) {
     const bandmask = rawBandmask || (Array(32).fill(true) as boolean[]);
     const br = new U8BitReader(new Uint8Array(ab));

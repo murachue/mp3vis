@@ -1,11 +1,20 @@
-import { parsefile, PromiseType } from './libmp3';
+import { parsefile, PromiseType, Frame, Maindata, Internal } from './libmp3';
 
-export type MyParsed = Omit<PromiseType<ReturnType<typeof parsefile>>, "soundframes"> & {
+export type Frameref = {
+    main_i: number;
+    maindata: Maindata;
+    offset: number;
+    size: number;
+};
+
+export type ParsedFrame = {
+    frame: Frame;
+    maindata?: Maindata;
+    internal?: Internal;
+    framerefs: Frameref[];
+};
+
+export type MyParsed = {
     sounds: number[][];
-    framerefs: {
-        main_i: number;
-        maindata: PromiseType<ReturnType<typeof parsefile>>["maindatas"][number];
-        offset: number;
-        size: number;
-    }[][];
+    parsedFrames: ParsedFrame[];
 };
