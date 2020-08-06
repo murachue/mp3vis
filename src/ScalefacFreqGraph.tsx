@@ -18,6 +18,13 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
         ctx.fillRect(0, 0, cw, ch);
 
         if (data?.internal?.requantized) {
+            const line = (x1: number, y1: number, x2: number, y2: number) => {
+                ctx.beginPath();
+                ctx.moveTo(x1 + 0.5, y1 + 0.5);
+                ctx.lineTo(x2 + 0.5, y2 + 0.5);
+                ctx.stroke();
+            };
+
             const sampfreq = sampling_frequencies[data.frame.header.sampling_frequency];
             const sflong = scalefactor_band_indices_long[sampfreq];
             const sfshort = scalefactor_band_indices_short[sampfreq];
@@ -25,10 +32,7 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
                 ctx.globalAlpha = 0.2;
                 for (const i of times(till)) {
                     const x = sflong[i];
-                    ctx.beginPath();
-                    ctx.moveTo(x + 0.5, 0);
-                    ctx.lineTo(x + 0.5, ch);
-                    ctx.stroke();
+                    line(x, 0, x, ch);
                 }
             };
             const drawShortFrom = (from: number) => {
@@ -36,15 +40,15 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
                     for (const wi of times(3)) {
                         ctx.globalAlpha = wi === 2 ? 0.2 : 0.1;
                         const x = sfshort[i] * 3 + (sfshort[i + 1] - sfshort[i]) * wi;
-                        ctx.beginPath();
-                        ctx.moveTo(x + 0.5, 0);
-                        ctx.lineTo(x + 0.5, ch);
-                        ctx.stroke();
+                        line(x, 0, x, ch);
                     }
                 }
             };
 
             ctx.strokeStyle = "black";
+
+            ctx.globalAlpha = 0.2;
+            line(0, ch / 2, cw, ch / 2);
 
             const sideinfo = data.frame.sideinfo.channel[0].granule[0];
             drawLongTill(sideinfo.block_type !== 2 ? sflong.length - 1 : sideinfo.switch_point ? 9 : 0);
@@ -56,10 +60,7 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
             for (const x of times(576)) {
                 // if (scalefactor_band_indices[[44100,48000,32000][data?.maindata.]] <= x)
                 ctx.strokeStyle = "red";
-                ctx.beginPath();
-                ctx.moveTo(x + 0.5, ch);
-                ctx.lineTo(x + 0.5, (1 - data.internal.requantized.granule[0].channel[0][x]) * ch);
-                ctx.stroke();
+                line(x, ch / 2, x, (data.internal.requantized.granule[0].channel[0][x] + 1) * ch / 2);
             }
         }
     };
