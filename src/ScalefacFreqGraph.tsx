@@ -38,7 +38,7 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
             const drawShortFrom = (from: number) => {
                 for (const i of range(from, sfshort.length - 1)) {
                     for (const wi of times(3)) {
-                        ctx.globalAlpha = wi === 2 ? 0.2 : 0.1;
+                        ctx.globalAlpha = wi === 0 ? 0.2 : 0.1;
                         const x = sfshort[i] * 3 + (sfshort[i + 1] - sfshort[i]) * wi;
                         line(x, 0, x, ch);
                     }
