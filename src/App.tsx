@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import './App.css';
 import { Checkband } from './Checkband';
 import { parsefile, sampling_frequencies } from './libmp3';
@@ -8,18 +8,16 @@ import { MyParsed } from './types';
 import { Framebar } from './Framebar';
 import { ScalefacFreqGraph } from './ScalefacFreqGraph';
 
-// FIXME: use useRef
-let aborted = false;
-
 function App() {
-  const [bandmask, setBandmask] = useState(Array(32).fill(true));
-  const [parsed, setParsed] = useState<MyParsed>({ sounds: [], parsedFrames: [], });
-  const [parsedFrames, setParsedFrames] = useState<number | null>(null);
-  const [parsedMaindatas, setParsedMaindatas] = useState<number | null>(null);
-  const [onDLSample, setOnDLSample] = useState<[() => void] | null>(null);
-  const [onPlay, setOnPlay] = useState<[() => void] | null>(null);
-  const [abortable, setAbortable] = useState(false);
-  const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
+  const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
+  const [parsed, setParsed] = React.useState<MyParsed>({ sounds: [], parsedFrames: [], });
+  const [parsedFrames, setParsedFrames] = React.useState<number | null>(null);
+  const [parsedMaindatas, setParsedMaindatas] = React.useState<number | null>(null);
+  const [onDLSample, setOnDLSample] = React.useState<[() => void] | null>(null);
+  const [onPlay, setOnPlay] = React.useState<[() => void] | null>(null);
+  const [abortable, setAbortable] = React.useState(false);
+  const aborted = React.useRef(false); // to be rendered but must not changed between renders (to access older instance referenced by parsefile())
+  const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
 
   async function parse(ab: ArrayBuffer) {
     setParsedFrames(0);
@@ -27,7 +25,7 @@ function App() {
     let parsing: typeof parsed = { sounds: [], parsedFrames: [] };
     setParsed(parsing);
     setAbortable(true);
-    aborted = false;
+    aborted.current = false;
     await new Promise(r => setTimeout(r, 0));
 
     await parsefile(ab, async (iter) => {
@@ -94,7 +92,7 @@ function App() {
         setParsed(parsing);
       }
       await new Promise(r => setTimeout(r, 0));
-      return !aborted;
+      return !aborted.current;
     }, bandmask);
 
     setParsedFrames(parsing.parsedFrames.length);
@@ -149,7 +147,7 @@ function App() {
       <Dropbox onFileDrop={parse}>
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
           <p>drag here</p>
-          <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
+          <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted.current = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
           <Wavebar width="100%" height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
           <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={selectedFrame ? parsed.parsedFrames[selectedFrame] || null : null} />
           <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} onSelectedFrame={setSelectedFrame} />
