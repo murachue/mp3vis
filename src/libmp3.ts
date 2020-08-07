@@ -367,7 +367,7 @@ const bigvalueHufftabs = [
 ] as const;
 
 // used for region_address to subbands, and requantize.
-// tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(=windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
+// tips: 36 = sf_band_long[8] = sf_band_short[3] * 3(windows) = 18(width/filterbank_band) * 2(num_band) is even point for block_split(type: "mixed").
 // tips: they have extra 1 band than each scalefactors...
 // 0..20+1+end subbands for long.
 export const scalefactor_band_indices_long = {
@@ -698,11 +698,6 @@ async function unpackframe(prevframes: Frame[], frame: Frame) {
 }
 export type Maindata = NonNullable<PromiseType<ReturnType<typeof unpackframe>>>;
 
-// pretab: "shortcut" to scalefactor. this can be used to make finally encoded scalefac smaller on higher freq band.
-// only for long blocks, in subbands.
-// note: concat'ing [0] for last beyond scalefactor_band.
-const pretab = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2].concat([0]);
-// some preps for pretab_i...
 const array_cons_diff = (arr: readonly number[]) => {
     const diff = arr.map((e, i) => arr[i + 1] - e);
     diff.pop(); // last is invalid (NaN)
@@ -713,25 +708,24 @@ const object_values_map = <K extends string | number, V, VA>(obj: Record<K, V>, 
 };
 const subbands_long_lengths = object_values_map(scalefactor_band_indices_long, array_cons_diff);
 const subbands_short_lengths = object_values_map(scalefactor_band_indices_short, array_cons_diff);
-// processed for easily zipped with "is"
-const pretab_i = object_values_map(subbands_long_lengths, v => v.flatMap((len, i) => Array(len).fill(pretab[i])) as number[]);
-const pretab_zero_i = Array(576).fill(0);
 
 // just (corrected) naive implementation of ISO 11172-3 2.4.3.4 "Formula for requantization and all scaling"...
-function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, pre: number, global_gain: number, subblock_gain: number) {
+function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
     // mysterious is[i]^(4/3) scaling (with negative support).
     const prescaled = Math.pow(Math.abs(rawsample), 4 / 3) * (rawsample < 0 ? -1 : 1);
     // scaledown to 0...1.0, int2frac.
     // pre: only with long-block.
     // expression is simplified:
     //   2 ^ ...
-    //      .25 * (- 2 * (1 + scalestep) * scalefac - 2 * (1 + scale_step) * pre)
-    //     =.5 * (- (1 + scalestep) * scalefac - (1 + scale_step) * pre)
-    //     =.5 * (- (1 + scalestep) * (scalefac + pre))
+    //       .25 * (- 2 * (1 + scalestep) * scalefac - 2 * (1 + scale_step) * pre)
+    //     = .5 * (- (1 + scalestep) * scalefac - (1 + scale_step) * pre)
+    //     = .5 * (- (1 + scalestep) * (scalefac + pre))
     //     -- scalestep is 0 or 1.
-    //     =.5 * (- {1 or 2} * (scalefac + pre))
-    //     =- {0.5 or 1} * (scalefac + pre)
-    const frac = prescaled * Math.pow(2, -(scale_step * (scalefac + pre)));
+    //     = .5 * (- {1 or 2} * (scalefac + pre))
+    //     = - {0.5 or 1} * (scalefac + pre)
+    //     -- assume pre is added to scalefac.
+    //     = - {0.5 or 1} * scalefac
+    const frac = prescaled * Math.pow(2, -scale_step * scalefac);
     // apply gain.
     // 210 is magic. !!in spec it is 64
     // subblock_gain: only with short-block (incl. mixed).
@@ -742,9 +736,7 @@ function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: numb
 export type SideinfoOfOneBlock = Frame["sideinfo"]["channel"][number]["granule"][number];
 export type MaindataOfOneBlock = Maindata["granule"][number]["channel"][number];
 // XXX: arguments are too complicated
-function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, scalefac_l: number[], is: number[], till: number) {
-    // pretab not required for mixed-long, but it is 0 till "till", so it is redundant but ok.
-    const pretab_i_freq = preflag ? pretab_i[sampfreq] : pretab_zero_i;
+function requantizeLongTill(sampfreq: typeof sampling_frequencies[number], scale_step: 1 | 0.5, global_gain: number, scalefac_l: number[], is: number[], till: number) {
     // padding 0 for scalefac_l.length==21 but subbands_long_lengths.length==22
     // XXX: is it ensured that zero_part_begin does not exceeds long_band[21]==418/384/550??
     const scalefac = scalefac_l.concat([0]).slice(0, till);
@@ -753,11 +745,11 @@ function requantizeLongTill(preflag: number, sampfreq: keyof typeof pretab_i, sc
 
     // XXX: we should only do 0...zero_part_begin for speed optimization.
     return is.slice(0, scalefactor_band_indices_long[sampfreq][till]).map((rawsample, i) => {
-        return requantizeSample(rawsample, scale_step, scalefac_i[i], pretab_i_freq[i], global_gain, 0);
+        return requantizeSample(rawsample, scale_step, scalefac_i[i], global_gain, 0);
     });
 }
 // XXX: arguments are too complicated
-function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.5, global_gain: number, subblock_gain: number[], scalefac_s: number[][], is: number[], from: number) {
+function requantizeShortFrom(sampfreq: typeof sampling_frequencies[number], scale_step: 1 | 0.5, global_gain: number, subblock_gain: number[], scalefac_s: number[][], is: number[], from: number) {
     const band_len = subbands_short_lengths[sampfreq];
     // padding 0 for scalefac_s.length==12 but subbands_short_lengths.length==13
     // XXX: is it ensured that zero_part_begin does not exceeds short_band[12]==418/384/550??
@@ -770,7 +762,7 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
         for (const win of times(3)) {
             for (const band_i of times(band_len[band])) {  // eslint-disable-line @typescript-eslint/no-unused-vars
                 const rawsample = is[i];
-                const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], 0, global_gain, subblock_gain[win]);
+                const rs = requantizeSample(rawsample, scale_step, scalefac[band][win], global_gain, subblock_gain[win]);
                 i++;
                 requantized.push(rs);
             }
@@ -778,24 +770,43 @@ function requantizeShortFrom(sampfreq: keyof typeof pretab_i, scale_step: 1 | 0.
     }
     return requantized;
 }
+// pretab: "shortcut" to scalefactor. this can be used to make finally encoded scalefac smaller on higher freq band.
+// only for long blocks, in subbands.
+// note: concat'ing [0] for last beyond scalefacs (truly last scalefactor_band that is not encoded).
+const pretab = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2].concat([0]);
+function scalefacWithPretab(preflag: number, scalefac_l: number[]) {
+    return scalefac_l.map((sf, i) => sf + (preflag ? pretab[i] : 0));
+}
 function requantizeOne(frame: Frame, sideinfo_gr_ch: SideinfoOfOneBlock, maindata_gr_ch: MaindataOfOneBlock) {
     const scale_step = sideinfo_gr_ch.scalefac_scale ? 1 : 0.5; // 0=sqrt2 1=2
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const is = maindata_gr_ch.is.is;
 
     switch (maindata_gr_ch.scalefac.type) {
-        case "long": // sideinfo.block_type !== 2
-            return requantizeLongTill(sideinfo_gr_ch.preflag, sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 22);
+        case "long": { // sideinfo.block_type !== 2
+            const scalefac_l_final = scalefacWithPretab(sideinfo_gr_ch.preflag, maindata_gr_ch.scalefac.scalefac_l);
+            return {
+                samples: requantizeLongTill(sampfreq, scale_step, sideinfo_gr_ch.global_gain, scalefac_l_final, is, 22),
+                scalefac_l: scalefac_l_final,
+            };
+        }
         case "short": // sideinfo.switch_point === 0
             // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
-            return requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 0);
+            return {
+                samples: requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 0),
+                scalefac_s: maindata_gr_ch.scalefac.scalefac_s,
+            };
         case "mixed": { // else (block_type === 2 && switch_point === 1)
-            // till even point 36 = long_scalefactor_indices[8], requantize as long. but preflag is always 0 (even if preflag=1, pretab till [8] is 0).
-            const long_requantized = requantizeLongTill(0, sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 8);
+            // till even point 36 = long_scalefactor_indices[8], requantize as long. no pretab for mixed (anyway they are 0 till [8]).
+            const long_requantized = requantizeLongTill(sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 8);
             // from even point 36 = short_scalefactor_indices[3], requantize as short.
             // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
             const short_requantized = requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 3);
-            return long_requantized.concat(short_requantized);
+            return {
+                samples: long_requantized.concat(short_requantized),
+                scalefac_l: maindata_gr_ch.scalefac.scalefac_l,
+                scalefac_s: maindata_gr_ch.scalefac.scalefac_s,
+            };
         }
         // default:
         //     throw new Error(`bad type: ${maindata_gr_ch.scalefac.type}`);
@@ -838,7 +849,7 @@ function reorder(frame: Frame, requantized: ReturnType<typeof requantize>) {
 
             if (frame.sideinfo.channel[ch].granule[gr].block_type !== 2) {
                 // long window is not reordered.
-                channel.push(requantized_gr_ch);
+                channel.push(requantized_gr_ch.samples);
                 continue;
             }
 
@@ -854,12 +865,12 @@ function reorder(frame: Frame, requantized: ReturnType<typeof requantize>) {
             const band_short_indices = scalefactor_band_indices_short[sampfreq];
             const band_short_lengths = subbands_short_lengths[sampfreq];
             const bandFrom = frame.sideinfo.channel[ch].granule[gr].switch_point ? 3 : 0;
-            const reordered = requantized_gr_ch.slice(0, band_short_indices[bandFrom]); // this is copy longs if switch_point, else just [].
+            const reordered = requantized_gr_ch.samples.slice(0, band_short_indices[bandFrom]); // this is copy longs if switch_point, else just [].
             for (const band of range(bandFrom, 13)) {
                 const len = band_short_lengths[band];
                 for (const i of times(len)) {
                     for (const window of times(3)) {
-                        reordered.push(requantized_gr_ch[band_short_indices[band] * 3 + window * len + i]);
+                        reordered.push(requantized_gr_ch.samples[band_short_indices[band] * 3 + window * len + i]);
                     }
                 }
             }

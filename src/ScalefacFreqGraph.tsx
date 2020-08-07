@@ -58,7 +58,7 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
             for (const x of times(576)) {
                 // if (scalefactor_band_indices[[44100,48000,32000][data?.maindata.]] <= x)
                 ctx.strokeStyle = "red";
-                line(x, ch / 2, x, (data.internal.requantized.granule[0].channel[0][x] + 1) * ch / 2);
+                line(x, ch / 2, x, (data.internal.requantized.granule[0].channel[0].samples[x] + 1) * ch / 2);
             }
         }
     };

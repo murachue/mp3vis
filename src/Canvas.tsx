@@ -17,6 +17,7 @@ type CanvasArgs<T> = {
     onResize?: (width: number, height: number) => void;
 } & JSX.IntrinsicElements["canvas"];
 
+// TODO: use devicePixelRatio
 export function Canvas<T>({ data, onDraw, onResize, ...props }: CanvasArgs<T>) {
     const refCanvas = React.useRef<HTMLCanvasElement>(null);
 
