@@ -709,10 +709,14 @@ const object_values_map = <K extends string | number, V, VA>(obj: Record<K, V>, 
 const subbands_long_lengths = object_values_map(scalefactor_band_indices_long, array_cons_diff);
 const subbands_short_lengths = object_values_map(scalefactor_band_indices_short, array_cons_diff);
 
+// power with negative support.
+function powReal(value: number, power: number) {
+    return Math.pow(Math.abs(value), power) * (value < 0 ? -1 : 1);
+}
 // just (corrected) naive implementation of ISO 11172-3 2.4.3.4 "Formula for requantization and all scaling"...
-function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
-    // mysterious is[i]^(4/3) scaling (with negative support).
-    const prescaled = Math.pow(Math.abs(rawsample), 4 / 3) * (rawsample < 0 ? -1 : 1);
+export function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
+    // mysterious is[i]^(4/3) scaling.
+    const prescaled = powReal(rawsample, 4 / 3);
     // scaledown to 0...1.0, int2frac.
     // pre: only with long-block.
     // expression is simplified:
@@ -735,6 +739,7 @@ function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: numb
 
 export type SideinfoOfOneBlock = Frame["sideinfo"]["channel"][number]["granule"][number];
 export type MaindataOfOneBlock = Maindata["granule"][number]["channel"][number];
+
 // XXX: arguments are too complicated
 function requantizeLongTill(sampfreq: typeof sampling_frequencies[number], scale_step: 1 | 0.5, global_gain: number, scalefac_l: number[], is: number[], till: number) {
     // padding 0 for scalefac_l.length==21 but subbands_long_lengths.length==22

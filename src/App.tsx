@@ -98,6 +98,7 @@ function App() {
       return !aborted.current;
     }, bandmask);
 
+    setParsed(parsing);
     setParsedFrames(parsing.parsedFrames.length);
     setParsedMaindatas(parsing.parsedFrames.filter(pf => pf.maindata).length);
     setAbortable(false);
