@@ -3,8 +3,6 @@ import { Canvas, CanvasUserArgs } from './Canvas';
 
 export type ZoombarUserArgs<T> = Omit<ZoombarArgs<T>, 'zooming' | 'data' | 'drawWhole' | 'drawZoom' | 'onZoom'>;
 type ZoombarArgs<T> = {
-    width: string | number;
-    height: string | number;
     barHeight: number;
     zoomWidth: number;
     drawWhole: (ctx: CanvasRenderingContext2D, width: number, height: number, data: T) => void;
@@ -14,7 +12,7 @@ type ZoombarArgs<T> = {
     data: T;
 } & CanvasUserArgs<T>;
 
-export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
+export function Zoombar<T>({ barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
     const [pointer, setPointer] = React.useState({ pos: { x: 0, y: 0 }, entered: false, pressed: false });
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
@@ -108,7 +106,6 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         {...props}
         data={{ data, pointer }}
         onDraw={onDraw}
-        style={{ width, height }}
         onMouseOver={(e: React.MouseEvent<HTMLCanvasElement>) => { enterMove(e); props.onMouseOver?.(e); }}
         onMouseOut={(e: React.MouseEvent<HTMLCanvasElement>) => { leave(e); props.onMouseOut?.(e); }}
         onMouseMove={(e: React.MouseEvent<HTMLCanvasElement>) => { enterMove(e); props.onMouseMove?.(e); }}
