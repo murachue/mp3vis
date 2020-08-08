@@ -9,9 +9,10 @@ type ScalefacFreqGraphArgs = {
     granule: number;
     channel: number;
     subgrid: boolean;
+    samplesFunc: (data: ParsedFrame, gr: number, ch: number) => number[];// TODO: make internals same struct for samples and remove this...
 } & CanvasUserArgs<ParsedFrame | null>;
 
-export function ScalefacFreqGraph({ data, granule, channel, subgrid, ...props }: ScalefacFreqGraphArgs) {
+export function ScalefacFreqGraph({ data, granule, channel, subgrid, samplesFunc, ...props }: ScalefacFreqGraphArgs) {
     const onDraw = (ctx: CanvasRenderingContext2D, data: ParsedFrame | null) => {
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = "white";
@@ -121,8 +122,9 @@ export function ScalefacFreqGraph({ data, granule, channel, subgrid, ...props }:
         }
 
         ctx.fillStyle = "red";
+        const samples = samplesFunc(data, granule, channel);
         for (const x of times(576)) {
-            vbar(x, ch / 2, (data.internal.requantized.granule[granule].channel[channel].samples[x] + 1) * ch / 2);
+            vbar(x, ch / 2, (samples[x] + 1) * ch / 2);
         }
     };
 
