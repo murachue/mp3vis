@@ -63,18 +63,11 @@ export function Zoombar<T>({ barHeight, zoomWidth, drawWhole, drawZoom, onZoom, 
     //     <div style={{ display: mousepos ? "block" : "none", width: 200, height: 40, position: "absolute", left: mousepos ? mousepos[0] : 0, top: 0, border: "1px solid red", background: "white" }}></div>
     // </div>);
 
-    // https://stackoverflow.com/a/31520106
-    const getRelPos = (
-        e: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent<HTMLCanvasElement>,
-        canvas: HTMLCanvasElement
-    ) => ({
-        x: e.nativeEvent.offsetX - canvas.offsetLeft,
-        y: e.nativeEvent.offsetY - canvas.offsetTop
-    });
+    // e.nativeEvent.offset[XY]: https://stackoverflow.com/a/31520106
 
     const enterMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = e.currentTarget;
-        const newPos = getRelPos(e, canvas);
+        const newPos = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
         setPointer(pointer => ({ ...pointer, pos: newPos, entered: true }));
         onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, pointer.pressed);
     };
@@ -88,7 +81,7 @@ export function Zoombar<T>({ barHeight, zoomWidth, drawWhole, drawZoom, onZoom, 
         e.currentTarget.setPointerCapture(e.pointerId);
 
         const canvas = e.currentTarget;
-        const newPos = getRelPos(e, canvas);
+        const newPos = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
         setPointer({ pos: newPos, entered: true, pressed: true });
         onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, /*pressed:*/true);
     };
@@ -97,7 +90,7 @@ export function Zoombar<T>({ barHeight, zoomWidth, drawWhole, drawZoom, onZoom, 
         e.currentTarget.releasePointerCapture(e.pointerId);
 
         const canvas = e.currentTarget;
-        const newPos = getRelPos(e, canvas);
+        const newPos = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
         setPointer(pointer => ({ ...pointer, pos: newPos, pressed: false }));
         onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, /*pressed:*/false);
     };
