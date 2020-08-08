@@ -3,6 +3,9 @@ import { parsefile, PromiseType, Frame, Maindata, Internal } from './libmp3';
 export type Frameref = {
     main_i: number;
     maindata: Maindata;
+    granule: number;
+    channel: number;
+    part: "scalefac" | "huffman";
     offset: number;
     size: number;
 };

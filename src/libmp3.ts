@@ -675,6 +675,8 @@ async function unpackframe(prevframes: Frame[], frame: Frame) {
             r.seek(part2_start + sideinfo.part2_3_length);
 
             channel.push({
+                part2_length,
+                part3_length,
                 scalefac: scalefac_gr_ch,
                 is: is_gr_ch,
             });

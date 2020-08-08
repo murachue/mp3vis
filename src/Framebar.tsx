@@ -31,7 +31,7 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
         }
     };
 
-    const drawFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: FramebarArgs["data"], i: number) => {
+    const drawFrame = (ctx: CanvasRenderingContext2D, width: number, height: number, data: FramebarArgs["data"], i: number, selectedFrame: number | null) => {
         const frame = data[i].frame;
         const xscale = width / frame.totalsize;
         // whole (at last becomes empty)
@@ -50,6 +50,16 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
             const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
             ctx.fillStyle = rainbow[color_i];
             ctx.fillRect(ref.offset * xscale, 0, ref.size * xscale, height);
+            // note: don't draw border for too-narrow (<3px)
+            if (3 < ref.size * xscale) {
+                ctx.strokeStyle = (ref.main_i === selectedFrame) ? "red" : "gray";
+                ctx.strokeRect(ref.offset * xscale, 0, ref.size * xscale, height);
+            }
+        }
+        // selected highlight
+        if (i === selectedFrame) {
+            ctx.strokeStyle = "red";
+            ctx.strokeRect(0, 0, width, height);
         }
     };
 
@@ -66,11 +76,7 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
                 data.parsedFrames.forEach((_frame, i) => { // eslint-disable @typescript/unused-variable
                     ctx.save();
                     ctx.translate(1 + i * w, 1);
-                    drawFrame(ctx, w - 2, height - 2, data.parsedFrames, i);
-                    if (i === data.selectedFrame) {
-                        ctx.strokeStyle = "red";
-                        ctx.strokeRect(0, 0, w - 2, height - 2);
-                    }
+                    drawFrame(ctx, w - 2, height - 2, data.parsedFrames, i, data.selectedFrame);
                     ctx.restore();
                 });
             } else {
@@ -99,13 +105,8 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
             const i = Math.floor(i_f);
             ctx.save();
             ctx.translate((i - hi) * interval + centerlx, 20);
-            drawFrame(ctx, 200, height - 25, data.parsedFrames, i);
-            ctx.fillStyle = "white";
-            if (i === data.selectedFrame) {
-                ctx.fillStyle = "red";
-                ctx.strokeStyle = "red";
-                ctx.strokeRect(0, 0, 200, height - 25);
-            }
+            drawFrame(ctx, 200, height - 25, data.parsedFrames, i, data.selectedFrame);
+            ctx.fillStyle = (i === data.selectedFrame) ? "red" : "white";
             ctx.font = "15px sans-serif";
             ctx.textBaseline = "top";
             ctx.fillText(`${i}: ${data.parsedFrames[i].frame.offset}`, 0, -15);

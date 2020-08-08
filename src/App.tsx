@@ -73,22 +73,56 @@ function App() {
               // this must not happened... (when this, not decoded at all)
               throw new Error(`ref overruns: frame=${iter.i} remain=${remain}`);
             }
+
+            // prepare for sub-ranges
+            const ranges = iter.maindata.granule.flatMap((gr, gr_i) =>
+              gr.channel.flatMap((ch, ch_i) => [
+                {
+                  granule: gr_i,
+                  channel: ch_i,
+                  part: "scalefac" as const,
+                  size: ch.part2_length / 8,
+                },
+                {
+                  granule: gr_i,
+                  channel: ch_i,
+                  part: "huffman" as const,
+                  size: ch.part3_length / 8,
+                }
+              ]));
+            mainsize -= iter.maindata.ancillary_nbits;
+
             // then, insert usage from there.
             for (; 0 < mainsize; i++) {
               const thatParsedFrame = parsing.parsedFrames[i];
               // XXX: what if data including extra bytes after frame?
-              const offset = start !== null ? start : thatParsedFrame.frame.head_side_size;
-              const availThatFrame = thatParsedFrame.frame.totalsize - offset;
-              const size = Math.min(mainsize, availThatFrame);
+              let offset = start !== null ? start : thatParsedFrame.frame.head_side_size;
+              for (const range of ranges) {
+                const availThatFrame = thatParsedFrame.frame.totalsize - offset;
+                const size = Math.min(range.size, availThatFrame);
+                if (size < 1 / 8) {
+                  // note: part2_length===0 but part3_length!==0 in the wild. (scalefac 0 just hit)
+                  continue;
+                }
 
-              parsing.parsedFrames[i].framerefs.push({
-                main_i: iter.i,
-                maindata: iter.maindata,
-                offset,
-                size,
-              });
+                parsing.parsedFrames[i].framerefs.push({
+                  main_i: iter.i,
+                  maindata: iter.maindata,
+                  granule: range.granule,
+                  channel: range.channel,
+                  part: range.part,
+                  offset,
+                  size,
+                });
+                offset += size;
+                mainsize -= size;
+                range.size -= size;
+              }
+              while (0 < ranges.length && ranges[0].size < 1 / 8) {
+                ranges.shift();
+              }
+
               start = null;
-              mainsize -= size;
             }
           }
         }
