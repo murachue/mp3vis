@@ -22,8 +22,8 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
 
         const peaks = memoized(peaksMemoRef, () => data.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
             const from = Math.floor(ch.length * i / width);
-            const to = Math.min(from + 1, Math.floor(ch.length * (i + 1) / width));
-            const peak = ch.slice(from, to).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
+            const count = Math.max(1, Math.ceil(ch.length / width));
+            const peak = ch.slice(from, from + count).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
             return peak;
         })), [width, data]);
 
