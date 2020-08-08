@@ -21,9 +21,10 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
         }
 
         const hline = (x1: number, y: number, x2: number) => {
+            const w = cw / 576;
             ctx.beginPath();
-            ctx.moveTo(x1 + 0.5, y + 0.5);
-            ctx.lineTo(x2 + 0.5, y + 0.5);
+            ctx.moveTo(x1 * w + 0.5, y + 0.5);
+            ctx.lineTo(x2 * w + 0.5, y + 0.5);
             ctx.stroke();
         };
         const vbar = (xbar: number, y1: number, y2: number) => {
@@ -41,13 +42,11 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
             const global_gain = sideinfo_gr_ch.global_gain;
             const scalefac_l = data.maindata!.granule[0].channel[0].scalefac.scalefac_l?.concat([0]); // [0] for very last non-encoded sfband.
             const cy = ch / 2;
-            for (const i of times(till)) {
-                const x = sfblong[i];
-                ctx.fillStyle = "#ddd";
-                vbar(x, 0, ch);
 
-                ctx.strokeStyle = "#eee";
+            ctx.strokeStyle = "#eee";
+            for (const i of times(till)) {
                 const scalefac = scalefac_l![i];
+                const x = sfblong[i];
                 const x2 = sfblong[i + 1];
                 let ory: number | null = null;
                 for (const y of range(8191, -1, -128)) {
@@ -62,6 +61,11 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
                     hline(x, cy - ry, x2);
                     hline(x, cy + ry, x2);
                 }
+            }
+
+            ctx.fillStyle = "#ddd";
+            for (const i of times(till)) {
+                vbar(sfblong[i], 0, ch);
             }
         };
         const drawShortFrom = (from: number) => {
