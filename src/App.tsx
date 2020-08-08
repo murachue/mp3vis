@@ -15,7 +15,10 @@ function App() {
   const [parsedMaindatas, setParsedMaindatas] = React.useState<number | null>(null);
   const [abortable, setAbortable] = React.useState(false);
   const aborted = React.useRef(false); // to be rendered but must not changed between renders (to access older instance referenced by parsefile())
-  const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
+  const [selectedFrame, setSelectedFrame] = React.useState(0);
+  const [playing, setPlaying] = React.useState({ ctx: null as AudioContext | null, start: 0, pos: 0, period: 0 });
+  const playAnimation = React.useRef<number | null>(null);
+  const [autoFollow, setAutoFollow] = React.useState(false);
 
   async function parse(ab: ArrayBuffer) {
     if (abortable) {
@@ -142,8 +145,26 @@ function App() {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
+    src.onended = () => {
+      cancelAnimationFrame(playAnimation.current!);
+      playAnimation.current = null;
+
+      setPlaying(playing => ({ ...playing, ctx: null }));
+    };
     src.start();
+
+    setPlaying({ ctx, start: ctx.currentTime, pos: 0, period: parsed.sounds[0].length / sampling_frequencies[parsed.parsedFrames[0].frame.header.sampling_frequency] });
   };
+  if (autoFollow && playing.ctx) {
+    const refreshPlaying = () => {
+      setPlaying(playing => ({ ...playing, pos: playing.ctx!.currentTime - playing.start }));
+      setSelectedFrame(Math.floor(playing.pos / playing.period * parsed.parsedFrames.length));
+    };
+    if (playAnimation.current) {
+      cancelAnimationFrame(playAnimation.current);
+    }
+    playAnimation.current = requestAnimationFrame(refreshPlaying);
+  }
 
   return (
     <div>
@@ -160,12 +181,12 @@ function App() {
             const hdr = firstFrame.frame.header;
             return <>{sampling_frequencies[hdr.sampling_frequency]} Hz {hdr.mode === 3 ? 1 : 2} ch</>;
           })()}</p>
-          <Wavebar width="100%" height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} />
-          <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={selectedFrame === null ? null : parsed.parsedFrames[selectedFrame] || null} />
-          <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} onSelectedFrame={setSelectedFrame} />
+          <Wavebar width="100%" height={100} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} />
+          <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} />
+          <Framebar width="100%" height={60} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr || 0)} />
           <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onDLSample}>download raw sample</button></p>
-          <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button></p>
+          <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button> <label><input type="checkbox" checked={autoFollow} onChange={e => setAutoFollow(e.target.checked)} />follow playing</label></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>

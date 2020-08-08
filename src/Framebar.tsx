@@ -4,29 +4,28 @@ import { ParsedFrame } from './types';
 
 export type FramebarArgs = {
     data: ParsedFrame[];
+    selectedFrame: number | null;
     onSelectedFrame: (frame: number | null) => void;
 } & ZoombarUserArgs<ParsedFrame[]>;
 
-export function Framebar({ data, onSelectedFrame, ...props }: FramebarArgs) {
+export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: FramebarArgs) {
     const [zoomingFrame, setZoomingFrame] = React.useState(false);
     const [selectingFrame, setSelectingFrame] = React.useState(false);
-    const [selectedFrame, setSelectedFrame] = React.useState<number | null>(null);
 
     const onZoomFrame = (offset: number | null, pressed: boolean) => {
-        if (!!offset !== zoomingFrame) {
-            setZoomingFrame(!!offset);
+        if ((offset !== null) !== zoomingFrame) {
+            setZoomingFrame(offset !== null);
         }
         if (pressed !== selectingFrame) {
             setSelectingFrame(pressed);
         }
 
-        if (offset && selectingFrame) {
+        if (offset && (pressed || selectingFrame)) {
             const onew = 200;
             const pad = 20;
             const interval = onew + pad;
             const newFrame = Math.floor((data.length - onew / interval) * offset + 0.5);
             if (newFrame !== selectedFrame) {
-                setSelectedFrame(newFrame);
                 onSelectedFrame(newFrame);
             }
         }
@@ -118,7 +117,7 @@ export function Framebar({ data, onSelectedFrame, ...props }: FramebarArgs) {
     };
 
     if (selectedFrame !== null && data.length <= selectedFrame) {
-        setSelectedFrame(null);
+        onSelectedFrame(null);
     }
 
     return (<Zoombar

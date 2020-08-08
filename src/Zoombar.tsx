@@ -10,24 +10,16 @@ type ZoombarArgs<T> = {
     drawWhole: (ctx: CanvasRenderingContext2D, width: number, height: number, data: T) => void;
     drawZoom: (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: T) => void;
     onZoom?: (offset: number | null, pressed: boolean) => void,
-    zooming: boolean;
+    zooming: boolean | number;
     data: T;
 } & CanvasUserArgs<T>;
 
-type PointerState = {
-    pos: {
-        x: number;
-        y: number;
-    };
-    pressed: boolean;
-};
-
 export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, drawZoom, onZoom, zooming, data, ...props }: ZoombarArgs<T>) {
-    const [pointer, setPointer] = React.useState<PointerState>({ pos: { x: 0, y: 0 }, pressed: false });
+    const [pointer, setPointer] = React.useState({ pos: { x: 0, y: 0 }, entered: false, pressed: false });
 
     const getOffset = (mox: number, cw: number) => Math.max(0, Math.min(mox, cw));
 
-    const onDraw = (ctx: CanvasRenderingContext2D, data: { data: T, pointer: PointerState; }) => {
+    const onDraw = (ctx: CanvasRenderingContext2D, data: { data: T, pointer: typeof pointer; }) => {
         const cw = ctx.canvas.width, ch = ctx.canvas.height;
 
         ctx.clearRect(0, 0, cw, ch);
@@ -40,8 +32,8 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         drawWhole(ctx, cw, barHeight, data.data);
         ctx.restore();
 
-        if (zooming) {
-            const mx = getOffset(data.pointer.pos.x, cw);
+        if (zooming !== false) {
+            const mx = getOffset(typeof zooming === "number" ? zooming * cw : data.pointer.pos.x, cw);
             const wx = Math.max(0, Math.min(mx - zoomWidth / 2, cw - zoomWidth));
 
             ctx.save();
@@ -77,13 +69,13 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
 
     const enterMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = e.currentTarget;
-        const newPointer = { pos: getRelPos(e, canvas), pressed: pointer.pressed };
-        setPointer(newPointer);
-        onZoom?.(getOffset(newPointer.pos.x, canvas.offsetWidth) / canvas.offsetWidth, newPointer.pressed);
+        const newPos = getRelPos(e, canvas);
+        setPointer(pointer => ({ ...pointer, pos: newPos, entered: true }));
+        onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, pointer.pressed);
     };
 
     const leave = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        // setMousepos(null);
+        setPointer(pointer => ({ ...pointer, entered: false }));
         onZoom?.(null, false);
     };
 
@@ -91,18 +83,18 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
         e.currentTarget.setPointerCapture(e.pointerId);
 
         const canvas = e.currentTarget;
-        const newPointer = { pos: getRelPos(e, canvas), pressed: true };
-        setPointer(newPointer);
-        onZoom?.(getOffset(newPointer.pos.x, canvas.offsetWidth) / canvas.offsetWidth, newPointer.pressed);
+        const newPos = getRelPos(e, canvas);
+        setPointer({ pos: newPos, entered: true, pressed: true });
+        onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, /*pressed:*/true);
     };
 
     const up = (e: React.PointerEvent<HTMLCanvasElement>) => {
         e.currentTarget.releasePointerCapture(e.pointerId);
 
         const canvas = e.currentTarget;
-        const newPointer = { pos: getRelPos(e, canvas), pressed: false };
-        setPointer(newPointer);
-        onZoom?.(getOffset(newPointer.pos.x, canvas.offsetWidth) / canvas.offsetWidth, newPointer.pressed);
+        const newPos = getRelPos(e, canvas);
+        setPointer(pointer => ({ ...pointer, pos: newPos, pressed: false }));
+        onZoom?.(getOffset(newPos.x, canvas.offsetWidth) / canvas.offsetWidth, /*pressed:*/false);
     };
 
     return (<Canvas

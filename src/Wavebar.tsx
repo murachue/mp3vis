@@ -4,9 +4,10 @@ import { memoized } from './memoized';
 
 export type WavebarArgs = {
     data: number[][];
+    zoomingPos: number | null;
 } & ZoombarUserArgs<number[][]>;
 
-export function Wavebar({ data, ...props }: WavebarArgs) {
+export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
     const peaksMemoRef = React.useRef();
     const [zoomingWave, setZoomingWave] = React.useState(false);
 
@@ -87,7 +88,7 @@ export function Wavebar({ data, ...props }: WavebarArgs) {
 
     return (<Zoombar
         {...props}
-        zooming={zoomingWave && !!data[0]}
+        zooming={data.length < 1 ? false : zoomingWave ? true : zoomingPos !== null ? zoomingPos : false}
         data={data}
         drawWhole={drawWholeWave} drawZoom={drawZoomWave}
         onZoom={(_offset, pressed) => zoomingWave !== pressed && setZoomingWave(pressed)}
