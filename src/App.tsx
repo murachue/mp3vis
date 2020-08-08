@@ -181,10 +181,13 @@ function App() {
             const hdr = firstFrame.frame.header;
             return <>{sampling_frequencies[hdr.sampling_frequency]} Hz {hdr.mode === 3 ? 1 : 2} ch</>;
           })()}</p>
-          <Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} />
-          <ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} subgrid={false} samplesFunc={(data, gr, ch) => data.internal!.requantized.granule[gr].channel[ch].samples} />
-          <Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr || 0)} />
-          <Checkband checks={bandmask} onChanged={setBandmask} />
+          <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
+          <p>reordered (only short-windows):</p>
+          <p><ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} subgrid={false} samplesFunc={(data, gr, ch) => data.internal!.reordered.granule[gr].channel[ch]} /></p>
+          <p>requantized:</p>
+          <p><ScalefacFreqGraph style={{ width: "576px", height: "150px", display: "block", margin: "0 0" }} data={parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} subgrid={true} samplesFunc={(data, gr, ch) => data.internal!.requantized.granule[gr].channel[ch].samples} /></p>
+          <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr || 0)} /></p>
+          <p><Checkband checks={bandmask} onChanged={setBandmask} /></p>
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onDLSample}>download raw sample</button></p>
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button> <label><input type="checkbox" checked={autoFollow} onChange={e => setAutoFollow(e.target.checked)} />follow playing</label></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>

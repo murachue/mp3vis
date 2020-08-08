@@ -81,7 +81,7 @@ export function ScalefacFreqGraph({ data, granule, channel, subgrid, samplesFunc
 
             for (const i of range(from, sfbshort.length - 1)) {
                 for (const wi of times(3)) {
-                    if (subgrid && wi !== 0) {
+                    if (!subgrid && wi !== 0) {
                         continue;
                     }
 
@@ -89,7 +89,7 @@ export function ScalefacFreqGraph({ data, granule, channel, subgrid, samplesFunc
                     const x = sfbshort[i] * 3 + (sfbshort[i + 1] - sfbshort[i]) * wi;
                     vbar(x, 0, ch);
 
-                    if (subgrid) {
+                    if (!subgrid) {
                         continue;
                     }
 
