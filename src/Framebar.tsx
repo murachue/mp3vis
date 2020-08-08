@@ -116,6 +116,7 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
         ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
     };
 
+    // FIXME: Cannot update a component (`App`) while rendering a different component (`Framebar`).
     if (selectedFrame !== null && data.length <= selectedFrame) {
         onSelectedFrame(null);
     }
