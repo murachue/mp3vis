@@ -710,13 +710,10 @@ const subbands_long_lengths = object_values_map(scalefactor_band_indices_long, a
 const subbands_short_lengths = object_values_map(scalefactor_band_indices_short, array_cons_diff);
 
 // power with negative support.
-function powReal(value: number, power: number) {
+export function powReal(value: number, power: number) {
     return Math.pow(Math.abs(value), power) * (value < 0 ? -1 : 1);
 }
-// just (corrected) naive implementation of ISO 11172-3 2.4.3.4 "Formula for requantization and all scaling"...
-export function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
-    // mysterious is[i]^(4/3) scaling.
-    const prescaled = powReal(rawsample, 4 / 3);
+export function requantizeMultiplier(scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
     // scaledown to 0...1.0, int2frac.
     // pre: only with long-block.
     // expression is simplified:
@@ -729,12 +726,19 @@ export function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefa
     //     = - {0.5 or 1} * (scalefac + pre)
     //     -- assume pre is added to scalefac.
     //     = - {0.5 or 1} * scalefac
-    const frac = prescaled * Math.pow(2, -scale_step * scalefac);
+    const normalizer = Math.pow(2, -scale_step * scalefac);
     // apply gain.
     // 210 is magic. !!in spec it is 64
     // subblock_gain: only with short-block (incl. mixed).
-    const gained = frac * Math.pow(2, 0.25 * (global_gain - 210 - 8 * subblock_gain));
-    return gained;
+    const gainer = Math.pow(2, 0.25 * (global_gain - 210 - 8 * subblock_gain));
+    return normalizer * gainer;
+}
+// just (corrected) naive implementation of ISO 11172-3 2.4.3.4 "Formula for requantization and all scaling"...
+export function requantizeSample(rawsample: number, scale_step: 0.5 | 1, scalefac: number, global_gain: number, subblock_gain: number) {
+    // mysterious is[i]^(4/3) scaling.
+    const prescaled = powReal(rawsample, 4 / 3);
+    // then multiply frac(normalizer) and gain
+    return prescaled * requantizeMultiplier(scale_step, scalefac, global_gain, subblock_gain);
 }
 
 export type SideinfoOfOneBlock = Frame["sideinfo"]["channel"][number]["granule"][number];

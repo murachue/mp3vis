@@ -1,6 +1,6 @@
 import React from 'react';
 import { Canvas, CanvasUserArgs } from './Canvas';
-import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample } from './libmp3';
+import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample, requantizeMultiplier, powReal } from './libmp3';
 import { times, range } from 'lodash-es';
 import { ParsedFrame } from './types';
 
@@ -73,7 +73,8 @@ export function ScalefacFreqGraph({ data, ...props }: ScalefacFreqGraphArgs) {
                         const subblock_gain = sideinfo_gr_ch.subblock_gain![wi];
                         const x2 = sfbshort[i] * 3 + (sfbshort[i + 1] - sfbshort[i]) * (wi + 1);
                         let ory: number | null = null;
-                        for (const y of range(8191, -1, -128)) {
+                        const step = powReal(1 / requantizeMultiplier(scale_step, scalefac, global_gain, subblock_gain), 3 / 4); // reverse-requantize 1
+                        for (const y of range(0, 8192, step)) {
                             const ry = Math.floor(requantizeSample(y, scale_step, scalefac, global_gain, subblock_gain));
                             if (ry < 1) {
                                 break;
