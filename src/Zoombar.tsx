@@ -65,7 +65,14 @@ export function Zoombar<T>({ width, height, barHeight, zoomWidth, drawWhole, dra
     //     <div style={{ display: mousepos ? "block" : "none", width: 200, height: 40, position: "absolute", left: mousepos ? mousepos[0] : 0, top: 0, border: "1px solid red", background: "white" }}></div>
     // </div>);
 
-    const getRelPos = (e: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement) => ({ x: e.clientX - canvas.offsetLeft, y: e.clientY - canvas.offsetTop });
+    // https://stackoverflow.com/a/31520106
+    const getRelPos = (
+        e: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent<HTMLCanvasElement>,
+        canvas: HTMLCanvasElement
+    ) => ({
+        x: e.nativeEvent.offsetX - canvas.offsetLeft,
+        y: e.nativeEvent.offsetY - canvas.offsetTop
+    });
 
     const enterMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = e.currentTarget;
