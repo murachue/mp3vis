@@ -82,7 +82,7 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
             ctx.fillRect(ref.offset * xscale, 0, ref.size * xscale, height);
             // note: don't draw border for too-narrow (<3px)
             if (3 < ref.size * xscale) {
-                ctx.strokeStyle = (ref.main_i === selectedFrame) ? "red" : "gray";
+                ctx.strokeStyle = (ref.main_i === selectedFrame) ? "#f66" : "gray";
                 ctx.strokeRect(ref.offset * xscale, 0, ref.size * xscale, height);
             }
         }
@@ -136,7 +136,7 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
             ctx.save();
             ctx.translate((i - hi) * interval + centerlx, 20);
             drawFrame(ctx, 200, height - 25, data.parsedFrames, i, data.selectedFrame);
-            ctx.fillStyle = (i === data.selectedFrame) ? "red" : "white";
+            ctx.fillStyle = (i === data.selectedFrame) ? "#f88" : "white";
             ctx.font = "15px sans-serif";
             ctx.textBaseline = "top";
             ctx.fillText(`${i}: ${data.parsedFrames[i].frame.offset}`, 0, -15);
