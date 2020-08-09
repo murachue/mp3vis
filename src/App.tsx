@@ -6,7 +6,7 @@ import { Dropbox } from './Dropbox';
 import { Wavebar } from './Wavebar';
 import { MyParsed } from './types';
 import { Framebar } from './Framebar';
-import { ScalefacFreqGraph } from './ScalefacFreqGraph';
+import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 
 function App() {
   const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
@@ -200,6 +200,30 @@ function App() {
     playAnimation.current = requestAnimationFrame(refreshPlaying);
   }
 
+  const SFGGranuleBox = (props: { granule: number; which: ScalefacFreqGraphArgs["which"]; }) => {
+    const data = (selectedFrame !== null && selectedFrame < parsed.parsedFrames.length) ? parsed.parsedFrames[selectedFrame] : null;
+    const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
+    return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
+      {
+        props.which === "stereoed"
+          ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={null} which={props.which} />
+          : <>
+            <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={0} which={props.which} />
+            <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={1} which={props.which} />
+          </>}
+    </div>;
+  };
+  const SFGBox = (props: { title: string; which: ScalefacFreqGraphArgs["which"]; }) => {
+    const [opened, setOpened] = React.useState(false);
+    return <details open={opened} onToggle={e => setOpened(opened => !opened)}>
+      <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
+      <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+        <SFGGranuleBox granule={0} which={props.which} />
+        <SFGGranuleBox granule={1} which={props.which} />
+      </div>
+    </details>;
+  };
+
   return (
     <div>
       <p>hello</p>
@@ -219,21 +243,9 @@ function App() {
             <p>Final output:</p>
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
-          <details>
-            <summary style={{ cursor: "pointer" }}>Stereoed:</summary>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="stereoed" />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="stereoed" />
-          </details>
-          <details>
-            <summary style={{ cursor: "pointer" }}>Reordered (only short-windows):</summary>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="reordered" />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="reordered" />
-          </details>
-          <details>
-            <summary style={{ cursor: "pointer" }}>Requantized:</summary>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="requantized" />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="requantized" />
-          </details>
+          <SFGBox title="Stereoed" which="stereoed" />
+          <SFGBox title="Reordered (only short-windows)" which="reordered" />
+          <SFGBox title="Requantized" which="requantized" />
           <div>
             <p>Frames:</p>
             <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
