@@ -49,6 +49,35 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
             const nback = ref.main_i - i;
             const color_i = nback < 3 ? nback : (((nback - 3) % (rainbow.length - 3)) + 3);
             ctx.fillStyle = rainbow[color_i];
+            if (ref.main_i === selectedFrame) {
+                const slashy = new OffscreenCanvas(12, 12);
+                const sc = slashy.getContext("2d")!;
+
+                sc.fillStyle = rainbow[color_i];
+                sc.fillRect(0, 0, slashy.width, slashy.height);
+
+                sc.strokeStyle = "#ccc";
+                sc.lineWidth = 4;
+                sc.beginPath();
+                sc.moveTo(8, -4);
+                sc.lineTo(-4, 8);
+                sc.stroke();
+                sc.beginPath();
+                sc.moveTo(16, 0);
+                sc.lineTo(0, 16);
+                sc.stroke();
+
+                // sc.strokeStyle = "black";
+                // sc.lineWidth = 1;
+                // sc.beginPath();
+                // sc.moveTo(0.5, 0.5);
+                // sc.lineTo(slashy.width, 0.5);
+                // sc.moveTo(0.5, 0.5);
+                // sc.lineTo(0.5, slashy.height);
+                // sc.stroke();
+
+                ctx.fillStyle = ctx.createPattern(slashy, "repeat")!;
+            }
             ctx.fillRect(ref.offset * xscale, 0, ref.size * xscale, height);
             // note: don't draw border for too-narrow (<3px)
             if (3 < ref.size * xscale) {
