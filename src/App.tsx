@@ -220,14 +220,19 @@ function App() {
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
           <details>
+            <summary style={{ cursor: "pointer" }}>Stereoed:</summary>
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="stereoed" />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="stereoed" />
+          </details>
+          <details>
             <summary style={{ cursor: "pointer" }}>Reordered (only short-windows):</summary>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="reordered" subgrid={false} />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="reordered" subgrid={false} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="reordered" />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="reordered" />
           </details>
           <details>
             <summary style={{ cursor: "pointer" }}>Requantized:</summary>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="requantized" subgrid={true} />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="requantized" subgrid={true} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="requantized" />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={(selectedFrame === null || parsed.parsedFrames.length <= selectedFrame) ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="requantized" />
           </details>
           <div>
             <p>Frames:</p>

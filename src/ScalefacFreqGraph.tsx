@@ -9,10 +9,9 @@ type ScalefacFreqGraphArgs = {
     granule: number;
     channel: number;
     which: "requantized" | "reordered" | "stereoed";
-    subgrid: boolean;
 } & CanvasUserArgs<ParsedFrame | null>;
 
-export function ScalefacFreqGraph({ data, granule, channel, which, subgrid, ...props }: ScalefacFreqGraphArgs) {
+export function ScalefacFreqGraph({ data, granule, channel, which, ...props }: ScalefacFreqGraphArgs) {
     const onDraw = (ctx: CanvasRenderingContext2D, data: ParsedFrame | null) => {
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = "white";
@@ -79,6 +78,7 @@ export function ScalefacFreqGraph({ data, granule, channel, which, subgrid, ...p
             const scalefac_s = maindata_gr_ch.scalefac.scalefac_s?.concat([[0, 0, 0]]); // [[0,0,0]] for very last non-encoded sfband.;
             const cy = ch / 2;
 
+            const subgrid = which === "requantized";
             for (const i of range(from, sfbshort.length - 1)) {
                 for (const wi of times(3)) {
                     if (!subgrid && wi !== 0) {
