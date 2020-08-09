@@ -13,8 +13,9 @@ export function Framebar({ data, selectedFrame, onSelectedFrame, ...props }: Fra
     const [selectingFrame, setSelectingFrame] = React.useState(false);
 
     const onZoomFrame = (offset: number | null, pressed: boolean) => {
-        if ((offset !== null) !== zoomingFrame) {
-            setZoomingFrame(offset !== null);
+        const tobeZoomingFrame = offset !== null && 0 < data.length;
+        if (tobeZoomingFrame !== zoomingFrame) {
+            setZoomingFrame(tobeZoomingFrame);
         }
         if (pressed !== selectingFrame) {
             setSelectingFrame(pressed);
