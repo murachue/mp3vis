@@ -205,7 +205,7 @@ function App() {
       <p>hello</p>
       <Dropbox onFileDrop={parse}>
         <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
-          <p>drag here</p>
+          <p>Drop a MP3 file into here.</p>
           <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted.current = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
           <p>{(() => {
             const firstFrame = parsed.parsedFrames[0];
@@ -215,18 +215,24 @@ function App() {
             const hdr = firstFrame.frame.header;
             return <>{sampling_frequencies[hdr.sampling_frequency]} Hz {hdr.mode === 3 ? 1 : 2} ch</>;
           })()}</p>
-          <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
-          <p>reordered (only short-windows):</p>
-          <p>
+          <div>
+            <p>Final output:</p>
+            <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
+          </div>
+          <details>
+            <summary style={{ cursor: "pointer" }}>Reordered (only short-windows):</summary>
             <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="reordered" subgrid={false} />
             <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="reordered" subgrid={false} />
-          </p>
-          <p>requantized:</p>
-          <p>
+          </details>
+          <details>
+            <summary style={{ cursor: "pointer" }}>Requantized:</summary>
             <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="requantized" subgrid={true} />
             <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="requantized" subgrid={true} />
-          </p>
-          <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
+          </details>
+          <div>
+            <p>Frames:</p>
+            <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
+          </div>
           <p><Checkband checks={bandmask} onChanged={setBandmask} /></p>
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onDLSample}>download raw sample</button></p>
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button> <label><input type="checkbox" checked={autoFollow} onChange={e => setAutoFollow(e.target.checked)} />follow playing</label></p>

@@ -27,8 +27,6 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
             return peak;
         })), [width, data]);
 
-        ctx.globalAlpha = 0.5;
-
         const drawPeakRange = (color: string, peaks: number[]) => {
             ctx.fillStyle = color;
             ctx.beginPath();
@@ -38,23 +36,25 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
             ctx.closePath();
             ctx.fill();
         };
-        const drawPeakLine = (color: string, peaks: number[]) => {
-            ctx.strokeStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(0, peaks[0]);
-            peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(0, peaks[0]);
-            peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 + height / 2 * peak));
-            ctx.stroke();
-        };
+        // const drawPeakLine = (color: string, peaks: number[]) => {
+        //     ctx.strokeStyle = color;
+        //     ctx.beginPath();
+        //     ctx.moveTo(0, peaks[0]);
+        //     peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 - height / 2 * peak));
+        //     ctx.stroke();
+        //     ctx.beginPath();
+        //     ctx.moveTo(0, peaks[0]);
+        //     peaks.forEach((peak, x) => ctx.lineTo(x, height / 2 + height / 2 * peak));
+        //     ctx.stroke();
+        // };
+
+        ctx.globalAlpha = 0.5;
 
         drawPeakRange("#8f8", peaks[0]);
-        drawPeakLine("#4f4", peaks[0]);
+        // drawPeakLine("#4f4", peaks[0]);
         if (peaks[1]) {
             drawPeakRange("#88f", peaks[1]);
-            drawPeakLine("#44f", peaks[1]);
+            // drawPeakLine("#44f", peaks[1]);
         }
     };
 
