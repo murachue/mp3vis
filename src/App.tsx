@@ -218,13 +218,13 @@ function App() {
           <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           <p>reordered (only short-windows):</p>
           <p>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} subgrid={false} samplesFunc={(data, gr, ch) => data.internal!.reordered.granule[gr].channel[ch]} />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} subgrid={false} samplesFunc={(data, gr, ch) => data.internal!.reordered.granule[gr].channel[ch]} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="reordered" subgrid={false} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="reordered" subgrid={false} />
           </p>
           <p>requantized:</p>
           <p>
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} subgrid={true} samplesFunc={(data, gr, ch) => data.internal!.requantized.granule[gr].channel[ch].samples} />
-            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} subgrid={true} samplesFunc={(data, gr, ch) => data.internal!.requantized.granule[gr].channel[ch].samples} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginRight: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={0} channel={0} which="requantized" subgrid={true} />
+            <ScalefacFreqGraph style={{ width: "576px", height: "150px", marginLeft: "10px" }} data={selectedFrame === null ? null : parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} granule={1} channel={0} which="requantized" subgrid={true} />
           </p>
           <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
           <p><Checkband checks={bandmask} onChanged={setBandmask} /></p>

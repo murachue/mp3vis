@@ -860,7 +860,7 @@ function reorder(frame: Frame, requantized: ReturnType<typeof requantize>) {
 
             if (frame.sideinfo.channel[ch].granule[gr].block_type !== 2) {
                 // long window is not reordered.
-                channel.push(requantized_gr_ch.samples);
+                channel.push({ samples: requantized_gr_ch.samples });
                 continue;
             }
 
@@ -885,7 +885,7 @@ function reorder(frame: Frame, requantized: ReturnType<typeof requantize>) {
                     }
                 }
             }
-            channel.push(reordered);
+            channel.push({ samples: reordered });
         }
 
         granule.push({ channel });
@@ -915,9 +915,9 @@ function intensityRatio(scalefac: number) {
     }
 }
 
-function intensityLongTill(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][], till: number) {
+function intensityLongTill(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], channel: { samples: number[]; }[], till: number) {
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
-    const processed: number[][] = [[], []];
+    const processedChannel: { samples: number[]; }[] = times(2, () => ({ samples: [] }));
 
     // using channel0(left) scalefac to calculate.
     const scalefac = maindata_gr.channel[0].scalefac;
@@ -934,36 +934,36 @@ function intensityLongTill(gr: number, frame: Frame, maindata_gr: Maindata["gran
         // using channel1(right) zero_part_begin to identify intensity-stereo band or not.
         if (index < maindata_gr.channel[1].is.zero_part_begin) {
             // not intensity-stereo part yet.
-            processed[0].push(...stereosamples[0].slice(index, index + len));
-            processed[1].push(...stereosamples[1].slice(index, index + len));
+            processedChannel[0].samples.push(...channel[0].samples.slice(index, index + len));
+            processedChannel[1].samples.push(...channel[1].samples.slice(index, index + len));
             continue;
         }
 
         const ratio = intensityRatio(scalefac_l[band]);
         if (!ratio) {
             // not intensity-stereo enabled band.
-            processed[0].push(...stereosamples[0].slice(index, index + len));
-            processed[1].push(...stereosamples[1].slice(index, index + len));
+            processedChannel[0].samples.push(...channel[0].samples.slice(index, index + len));
+            processedChannel[1].samples.push(...channel[1].samples.slice(index, index + len));
             continue;
         }
 
         const [left, right] = ratio;
         for (const i of times(len)) {
             // also using channel0(left) "is" to calculate.
-            const intensity = stereosamples[0][index + i];
-            processed[0].push(intensity * left);
-            processed[1].push(intensity * right);
+            const intensity = channel[0].samples[index + i];
+            processedChannel[0].samples.push(intensity * left);
+            processedChannel[1].samples.push(intensity * right);
         }
     }
 
-    return processed;
+    return processedChannel;
 }
 
 // note: return is from "from", not from "0", to make easier to concat() later.
 // note: Lagerstrom MP3 Thesis's intensity stereo short code has a bug: not multiplying but just assigned...
-function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][], from: number) {
+function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: { samples: number[]; }[], from: number) {
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency]; // all are same if [0] or [3].
-    const processed: number[][] = [[], []];
+    const processedChannel: { samples: number[]; }[] = times(2, () => ({ samples: [] }));
 
     // using channel0(left) scalefac to calculate.
     const scalefac = maindata_gr.channel[0].scalefac;
@@ -980,8 +980,8 @@ function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["gra
         // using channel1(right) zero_part_begin to intensity-stereo band or not.
         if (index < maindata_gr.channel[1].is.zero_part_begin) {
             // not intensity-stereo part yet.
-            processed[0].push(...stereosamples[0].slice(index, index + len * 3));
-            processed[1].push(...stereosamples[1].slice(index, index + len * 3));
+            processedChannel[0].samples.push(...stereosamples[0].samples.slice(index, index + len * 3));
+            processedChannel[1].samples.push(...stereosamples[1].samples.slice(index, index + len * 3));
             continue;
         }
 
@@ -989,8 +989,8 @@ function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["gra
             const ratio = intensityRatio(scalefac_s[band][window]);
             if (!ratio) {
                 // not intensity-stereo enabled band.
-                processed[0].push(...stereosamples[0].slice(index, index + len));
-                processed[1].push(...stereosamples[1].slice(index, index + len));
+                processedChannel[0].samples.push(...stereosamples[0].samples.slice(index, index + len));
+                processedChannel[1].samples.push(...stereosamples[1].samples.slice(index, index + len));
                 continue;
             }
 
@@ -999,18 +999,18 @@ function intensityShortFrom(gr: number, frame: Frame, maindata_gr: Maindata["gra
             const [left, right] = ratio;
             for (const i of times(len)) {
                 // also using channel0(left) "is" to calculate.
-                const intensity = stereosamples[0][index_win + i];
-                processed[0].push(intensity * left);
-                processed[1].push(intensity * right);
+                const intensity = stereosamples[0].samples[index_win + i];
+                processedChannel[0].samples.push(intensity * left);
+                processedChannel[1].samples.push(intensity * right);
             }
         }
     }
 
-    return processed;
+    return processedChannel;
 }
 
 // Intensity Stereo processing is complecated because of different factors for long and short * 3...
-function intensitystereo(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: number[][]) {
+function intensitystereo(gr: number, frame: Frame, maindata_gr: Maindata["granule"][number], stereosamples: { samples: number[]; }[]) {
     const type = maindata_gr.channel[0].scalefac.type;
     switch (type) {
         case "long": { // sideinfo.block_type !== 2
@@ -1022,7 +1022,10 @@ function intensitystereo(gr: number, frame: Frame, maindata_gr: Maindata["granul
         case "mixed": { // else (block_type === 2 && switch_point === 1)
             const [longl, longr] = intensityLongTill(gr, frame, maindata_gr, stereosamples, 8);
             const [shortl, shortr] = intensityShortFrom(gr, frame, maindata_gr, stereosamples, 3);
-            return [longl.concat(shortl), longr.concat(shortr)];
+            return [
+                { samples: longl.samples.concat(shortl.samples) },
+                { samples: longr.samples.concat(shortr.samples) }
+            ];
         }
         default:
             throw new Error(`bad scalefac.type: ${type}`);
@@ -1039,30 +1042,30 @@ function jointstereo(frame: Frame, maindata: Maindata, reordered: ReturnType<typ
 
     const granule = [];
     for (const gr of times(2)) {
-        let processed = reordered.granule[gr].channel;
+        let channel = reordered.granule[gr].channel;
         // Middle-Side stereo processing.
         if ((frame.header.mode_extension & 2) !== 0) {
             const max_pos = Math.max(...times(2).map(ch => maindata.granule[gr].channel[ch].is.zero_part_begin));
             const ms: number[][] = [[], []];
             for (const i of times(max_pos)) {
-                ms[0].push((processed[0][i] + processed[1][i]) * inv_sqrt2);
-                ms[1].push((processed[0][i] - processed[1][i]) * inv_sqrt2);
+                ms[0].push((channel[0].samples[i] + channel[1].samples[i]) * inv_sqrt2);
+                ms[1].push((channel[0].samples[i] - channel[1].samples[i]) * inv_sqrt2);
             }
             // copy tail as is.
             for (const i of range(max_pos, 576)) {
-                ms[0].push(processed[0][i]);
-                ms[1].push(processed[1][i]);
+                ms[0].push(channel[0].samples[i]);
+                ms[1].push(channel[1].samples[i]);
             }
-            processed = ms;
+            channel = ms.map(samples => ({ samples }));
         }
 
         // Intensity stereo processing.
         if ((frame.header.mode_extension & 1) !== 0) {
-            processed = intensitystereo(gr, frame, maindata.granule[gr], processed);
+            channel = intensitystereo(gr, frame, maindata.granule[gr], channel);
         }
 
         granule.push({
-            channel: processed,
+            channel,
         });
     }
 
@@ -1084,11 +1087,11 @@ function antialias(frame: Frame, stereoed: ReturnType<typeof jointstereo>) {
     for (const gr of times(2)) {
         const channel = [];
         for (const ch of times(nchans)) {
-            const samples = stereoed.granule[gr].channel[ch];
+            const samples = stereoed.granule[gr].channel[ch].samples;
             const sideinfo = frame.sideinfo.channel[ch].granule[gr];
             // antialias is only for long-blocks
             if (sideinfo.block_type === 2 && sideinfo.switch_point === 0) {
-                channel.push(samples);
+                channel.push({ samples });
                 continue;
             }
 
@@ -1107,7 +1110,7 @@ function antialias(frame: Frame, stereoed: ReturnType<typeof jointstereo>) {
                     work[upperi] = uppersamp;
                 }
             }
-            channel.push(work.concat(samples.slice(18 * till_sb)));
+            channel.push({ samples: work.concat(samples.slice(18 * till_sb)) });
         }
 
         granule.push({ channel });
@@ -1186,7 +1189,7 @@ function hybridsynth(frame: Frame, rawprevtail: SubbandsType | null, antialiased
         const channel: NonNullable<SubbandsType>["channel"] = [];
         const tail_ch = [];
         for (const ch of times(nchans)) {
-            const samples = antialiased.granule[gr].channel[ch];
+            const samples = antialiased.granule[gr].channel[ch].samples;
             const sideinfo = frame.sideinfo.channel[ch].granule[gr];
             const is_mixed_block = sideinfo.block_type === 2 && sideinfo.switch_point === 1;
             const subband: NonNullable<SubbandsType>["channel"][number]["subband"] = [];

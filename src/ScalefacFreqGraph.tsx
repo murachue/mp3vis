@@ -1,6 +1,6 @@
 import React from 'react';
 import { Canvas, CanvasUserArgs } from './Canvas';
-import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample, requantizeMultiplier, powReal } from './libmp3';
+import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample, requantizeMultiplier, powReal, Internal } from './libmp3';
 import { times, range } from 'lodash-es';
 import { ParsedFrame } from './types';
 
@@ -8,11 +8,11 @@ type ScalefacFreqGraphArgs = {
     data: ParsedFrame | null;
     granule: number;
     channel: number;
+    which: "requantized" | "reordered" | "stereoed";
     subgrid: boolean;
-    samplesFunc: (data: ParsedFrame, gr: number, ch: number) => number[];// TODO: make internals same struct for samples and remove this...
 } & CanvasUserArgs<ParsedFrame | null>;
 
-export function ScalefacFreqGraph({ data, granule, channel, subgrid, samplesFunc, ...props }: ScalefacFreqGraphArgs) {
+export function ScalefacFreqGraph({ data, granule, channel, which, subgrid, ...props }: ScalefacFreqGraphArgs) {
     const onDraw = (ctx: CanvasRenderingContext2D, data: ParsedFrame | null) => {
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = "white";
@@ -122,7 +122,7 @@ export function ScalefacFreqGraph({ data, granule, channel, subgrid, samplesFunc
         }
 
         ctx.fillStyle = "red";
-        const samples = samplesFunc(data, granule, channel);
+        const samples = data.internal![which].granule[granule].channel[channel].samples;
         for (const x of times(576)) {
             vbar(x, ch / 2, (samples[x] + 1) * ch / 2);
         }
