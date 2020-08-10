@@ -213,16 +213,26 @@ function App() {
           </>}
     </div>;
   };
-  const SFGBox = (props: { title: string; which: ScalefacFreqGraphArgs["which"]; }) => {
-    const [opened, setOpened] = React.useState(false);
-    return <details open={opened} onToggle={e => setOpened(opened => !opened)}>
+  const SFGBox = (props: { title: string; which: ScalefacFreqGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
+    // const [open, setOpen] = React.useState(false);
+    const detailsRef = React.useRef<HTMLDetailsElement>(null);
+    // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
+    return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
       <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
-      <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
-        <SFGGranuleBox granule={0} which={props.which} />
-        <SFGGranuleBox granule={1} which={props.which} />
-      </div>
+      {
+        props.open
+          ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+            <SFGGranuleBox granule={0} which={props.which} />
+            <SFGGranuleBox granule={1} which={props.which} />
+          </div>
+          : <></>
+      }
     </details>;
   };
+
+  const [stereoOpened, setStereoOpened] = React.useState(false);
+  const [reorderOpened, setReorderOpened] = React.useState(false);
+  const [requantizeOpened, setRequantizeOpened] = React.useState(false);
 
   return (
     <div>
@@ -243,21 +253,21 @@ function App() {
             <p>Final output:</p>
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
-          <SFGBox title="Stereoed" which="stereoed" />
-          <SFGBox title="Reordered (only short-windows)" which="reordered" />
-          <SFGBox title="Requantized" which="requantized" />
+          <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={open => setStereoOpened(open)} />
+          <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={open => setReorderOpened(open)} />
+          <SFGBox title="Requantized" which="requantized" open={requantizeOpened} setOpen={open => setRequantizeOpened(open)} />
           <div>
             <p>Frames:</p>
             <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
           </div>
-          <p><Checkband checks={bandmask} onChanged={setBandmask} /></p>
+          <Checkband checks={bandmask} onChanged={setBandmask} />
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onDLSample}>download raw sample</button></p>
           <p><button disabled={parsed.parsedFrames.length < 1} onClick={onPlay}>play sample</button> <label><input type="checkbox" checked={autoFollow} onChange={e => setAutoFollow(e.target.checked)} />follow playing</label></p>
           <p style={{ overflow: "hidden", height: "3.5em" }}>{/* ...internals */}</p>
         </div>
       </Dropbox>
-    </div >
+    </div>
   );
-}
+};
 
 export default App;
