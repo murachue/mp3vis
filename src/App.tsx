@@ -209,7 +209,7 @@ function App() {
           ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={null} which={props.which} />
           : <>
             <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={0} which={props.which} />
-            <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={1} which={props.which} />
+            {1 < parsed.sounds.length ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={1} which={props.which} /> : <></>}
           </>}
     </div>;
   };
