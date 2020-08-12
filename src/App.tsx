@@ -255,12 +255,15 @@ function App() {
     </details>;
   };
 
-  const [hysynthOpened, setHysynthOpened] = React.useState(false);
   const [freqinvOpened, setFreqinvOpened] = React.useState(false);
+  const [hysynthOpened, setHysynthOpened] = React.useState(false);
   const [antialiasOpened, setAntialiasOpened] = React.useState(false);
   const [stereoOpened, setStereoOpened] = React.useState(false);
   const [reorderOpened, setReorderOpened] = React.useState(false);
   const [requantizeOpened, setRequantizeOpened] = React.useState(false);
+  const setAllOpen = (open: boolean) => {
+    [setFreqinvOpened, setHysynthOpened, setAntialiasOpened, setStereoOpened, setReorderOpened, setRequantizeOpened].forEach(fn => fn(open));
+  };
 
   return (
     <div>
@@ -281,8 +284,9 @@ function App() {
             <p>Final output:</p>
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
-          <SbGBox title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
+          <p><button onClick={e => setAllOpen(true)}>Open all</button><button onClick={e => setAllOpen(false)}>Close all</button></p>
           <SbGBox title="FreqInverted" which="freqinved" open={freqinvOpened} setOpen={setFreqinvOpened} />
+          <SbGBox title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
           <SbGBox title="Antialiased" which="antialiased" open={antialiasOpened} setOpen={setAntialiasOpened} />
           <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
           <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
