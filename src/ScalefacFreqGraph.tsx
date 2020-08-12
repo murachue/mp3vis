@@ -76,6 +76,10 @@ export function ScalefacFreqGraph({ data, granule, channel, which, ...props }: S
                     hline(x, cy - ry, x2);
                     hline(x, cy + ry, x2);
                 }
+
+                const ry = Math.floor(requantizeSample(8191, scale_step, scalefac, global_gain, 0));
+                hline(x, cy - ry, x2);
+                hline(x, cy + ry, x2);
             }
         };
         const drawShortGridFrom = (from: number) => {
@@ -110,6 +114,9 @@ export function ScalefacFreqGraph({ data, granule, channel, which, ...props }: S
                         hline(x, cy - ry, x2);
                         hline(x, cy + ry, x2);
                     }
+                    const ry = Math.floor(requantizeSample(8191, scale_step, scalefac, global_gain, subblock_gain));
+                    hline(x, cy - ry, x2);
+                    hline(x, cy + ry, x2);
                 }
             }
         };
@@ -120,8 +127,8 @@ export function ScalefacFreqGraph({ data, granule, channel, which, ...props }: S
         };
         if (which !== "stereoed" || data.frame.sideinfo.channel.length < 2 || blockStyle(0) === blockStyle(1)) {
             const style = blockStyle(channel || 0);
-            drawLongGridTill({ long: sfblong.length - 1, mixed: 9, short: 0 }[style]);
-            drawShortGridFrom({ long: sfbshort.length - 1, mixed: 2, short: 0 }[style]);
+            drawLongGridTill({ long: sfblong.length - 1, mixed: 8, short: 0 }[style]);
+            drawShortGridFrom({ long: sfbshort.length - 1, mixed: 3, short: 0 }[style]);
         };
 
         if (sideinfo_gr_ch.block_type === 2 && sideinfo_gr_ch.switch_point) {
