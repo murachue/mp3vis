@@ -1431,7 +1431,7 @@ function decodeframe(prev_v_vec_q: VVecQType | null, prevsound: SubbandsType | n
     const antialiased = antialias(frame, stereoed);
     // IMDCT, windowing and overlap adding are called "hybrid filter bank"
     const hysynthed_timedom = hybridsynth(frame, prevsound, antialiased);
-    const freqinved = freqinv({ granule: hysynthed_timedom.granule });
+    const freqinved = freqinv(hysynthed_timedom);
     const sbsynthed = subbandsynth(frame, prev_v_vec_q, freqinved, bandmask);
 
     return {

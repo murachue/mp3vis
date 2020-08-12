@@ -253,9 +253,9 @@ function App() {
             <p>Final output:</p>
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
-          <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={open => setStereoOpened(open)} />
-          <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={open => setReorderOpened(open)} />
-          <SFGBox title="Requantized" which="requantized" open={requantizeOpened} setOpen={open => setRequantizeOpened(open)} />
+          <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
+          <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
+          <SFGBox title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
           <div>
             <p>Frames:</p>
             <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>

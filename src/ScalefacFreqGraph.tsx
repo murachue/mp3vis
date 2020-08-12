@@ -1,6 +1,6 @@
 import React from 'react';
 import { Canvas, CanvasUserArgs } from './Canvas';
-import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample, requantizeMultiplier, powReal, Internal } from './libmp3';
+import { sampling_frequencies, scalefactor_band_indices_long, scalefactor_band_indices_short, requantizeSample, requantizeMultiplier, powReal } from './libmp3';
 import { times, range } from 'lodash-es';
 import { ParsedFrame } from './types';
 
