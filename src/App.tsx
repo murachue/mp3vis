@@ -7,6 +7,7 @@ import { Wavebar } from './Wavebar';
 import { MyParsed } from './types';
 import { Framebar } from './Framebar';
 import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
+import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 
 function App() {
   const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
@@ -230,6 +231,33 @@ function App() {
     </details>;
   };
 
+  const SbGGranuleBox = (props: { granule: number; which: SubbandGraphArgs["which"]; }) => {
+    const data = (selectedFrame !== null && selectedFrame < parsed.parsedFrames.length) ? parsed.parsedFrames[selectedFrame] : null;
+    const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
+    return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
+      <SubbandGraph style={graphStyle} data={data} granule={props.granule} which={props.which} />
+    </div>;
+  };
+  const SbGBox = (props: { title: string; which: SubbandGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
+    // const [open, setOpen] = React.useState(false);
+    const detailsRef = React.useRef<HTMLDetailsElement>(null);
+    // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
+    return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
+      <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
+      {
+        props.open
+          ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+            <SbGGranuleBox granule={0} which={props.which} />
+            <SbGGranuleBox granule={1} which={props.which} />
+          </div>
+          : <></>
+      }
+    </details>;
+  };
+
+  const [hysynthOpened, setHysynthOpened] = React.useState(false);
+  const [freqinvOpened, setFreqinvOpened] = React.useState(false);
+  const [antialiasOpened, setAntialiasOpened] = React.useState(false);
   const [stereoOpened, setStereoOpened] = React.useState(false);
   const [reorderOpened, setReorderOpened] = React.useState(false);
   const [requantizeOpened, setRequantizeOpened] = React.useState(false);
@@ -253,6 +281,9 @@ function App() {
             <p>Final output:</p>
             <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} /></p>
           </div>
+          <SbGBox title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
+          <SbGBox title="FreqInverted" which="freqinved" open={freqinvOpened} setOpen={setFreqinvOpened} />
+          <SbGBox title="Antialiased" which="antialiased" open={antialiasOpened} setOpen={setAntialiasOpened} />
           <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
           <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
           <SFGBox title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
