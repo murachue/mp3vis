@@ -5,22 +5,23 @@ import { memoized } from './memoized';
 export type WavebarArgs = {
     data: number[][];
     zoomingPos: number | null;
+    hilight?: [number, number];
 } & ZoombarUserArgs<number[][]>;
 
-export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
+export function Wavebar({ data, zoomingPos, hilight, ...props }: WavebarArgs) {
     const peaksMemoRef = React.useRef();
     const [zoomingWave, setZoomingWave] = React.useState(false);
 
-    const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: number[][]) => {
+    const drawWholeWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: { points: number[][], hilight: [number, number] | undefined; }) => {
         ctx.fillStyle = "#222";
         ctx.globalAlpha = 1.0;
         ctx.fillRect(0, 0, width, height);
 
-        if (data.length < 1) {
+        if (data.points.length < 1) {
             return;
         }
 
-        const peaks = memoized(peaksMemoRef, () => data.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
+        const peaks = memoized(peaksMemoRef, () => data.points.map(ch => (Array(width).fill(0) as number[]).map((_, i) => {
             const from = Math.floor(ch.length * i / width);
             const count = Math.max(1, Math.ceil(ch.length / width));
             const peak = ch.slice(from, from + count).reduce((prev, cur) => Math.max(prev, Math.abs(cur)), 0);
@@ -48,6 +49,12 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
         //     ctx.stroke();
         // };
 
+        if (data.hilight) {
+            ctx.fillStyle = "#228";
+            const scalex = width / data.points[0].length;
+            ctx.fillRect(data.hilight[0] * scalex, 0, (data.hilight[1] - data.hilight[0]) * scalex, height);
+        }
+
         ctx.globalAlpha = 0.5;
 
         drawPeakRange("#8f8", peaks[0]);
@@ -58,13 +65,18 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
         }
     };
 
-    const drawZoomWave = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: number[][]) => {
+    const drawZoomWave = (ctx: CanvasRenderingContext2D, offset: number, width: number, height: number, data: { points: number[][], hilight: [number, number] | undefined; }) => {
         ctx.globalAlpha = 1.0;
 
         ctx.fillStyle = "#222";
         ctx.fillRect(0.5, 0.5, width, height);
 
-        const from = Math.floor((data[0].length - width) * offset);
+        const from = Math.floor((data.points[0].length - width) * offset);
+
+        if (data.hilight) {
+            ctx.fillStyle = "#228";
+            ctx.fillRect(data.hilight[0] - from, 0, data.hilight[1] - data.hilight[0], height);
+        }
 
         // ctx.globalAlpha = 0.5;
 
@@ -77,9 +89,9 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
             });
             ctx.stroke();
         };
-        drawWave("#8f8", data[0].slice(from, from + width));
-        if (data[1]) {
-            drawWave("#88f", data[1].slice(from, from + width));
+        drawWave("#8f8", data.points[0].slice(from, from + width));
+        if (data.points[1]) {
+            drawWave("#88f", data.points[1].slice(from, from + width));
         }
 
         ctx.strokeStyle = "white";
@@ -89,7 +101,7 @@ export function Wavebar({ data, zoomingPos, ...props }: WavebarArgs) {
     return (<Zoombar
         {...props}
         zooming={data.length < 1 ? false : zoomingWave ? true : zoomingPos !== null ? zoomingPos : false}
-        data={data}
+        data={{ points: data, hilight }}
         drawWhole={drawWholeWave} drawZoom={drawZoomWave}
         onZoom={(_offset, pressed) => zoomingWave !== pressed && setZoomingWave(pressed)}
     />);
