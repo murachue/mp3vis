@@ -6,45 +6,47 @@ export type PromiseType<T extends Promise<any>> = T extends Promise<infer P>
     : never;
 
 // bslbf/uimsbf reader
+function extb(bits: number, msboff: number, nbits: number) {
+    return (bits >> (8 - nbits - msboff)) & ((1 << nbits) - 1);
+}
 class U8BitReader {
     u8: Uint8Array;
     atebits: number;
-    bits: number;
+    bits: number | null;
     bypos: number;
 
     constructor(u8: Uint8Array) {
         this.u8 = u8;
-        // tsc does not recognize if using #seek. or calling method in ctor is invalid?
-        // this.seek(0);
-        this.bypos = -1;
-        this.atebits = 8;
-        this.bits = 0;
+        this.bypos = 0;
+        this.atebits = 0;
+        this.bits = null;
     }
     async readbits(nbits: number) {
         let b = 0;
         while (0 < nbits) {
-            if (8 <= this.atebits) {
+            if (this.bits === null || 8 <= this.atebits) {
                 if (this.eof()) {
                     // even if partial read succeeds.
                     throw new Error("!eof");
                 }
-                this.bypos += 1;
+                if (8 <= this.atebits) {
+                    this.bypos += 1;
+                    this.atebits = 0;
+                }
                 this.bits = this.u8[this.bypos];
-                this.atebits = 0;
             }
-            const r = Math.min(8 - this.atebits, nbits);
-            b = (b << r) | ((this.bits >> (8 - r - this.atebits)) & ((1 << r) - 1));
+            const r = Math.min(8 - this.atebits, nbits); // read n bits in this byte
+            b = (b << r) | extb(this.bits, this.atebits, r);
             this.atebits += r;
             nbits -= r;
         }
         return b;
     }
     async readbytes(nbytes: number) {
-        if (this.atebits !== 8) {
-            throw new Error(`not byte boundary tell=${this.tell()}`);
-        }
-        const nrb = Math.min(this.u8.length - this.bypos - 1, nbytes);
-        const bys = this.u8.slice(this.bypos + 1, this.bypos + 1 + nrb);
+        this.byteboundary();
+        const offb = this.nextbyte();
+        const nrb = Math.min(this.u8.length - offb, nbytes);
+        const bys = this.u8.slice(offb, offb + nrb);
         this.bypos += nrb;
         if (nrb < nbytes) {
             // even if partial read succeeds.
@@ -52,21 +54,34 @@ class U8BitReader {
         }
         return bys;
     }
+    async findbyte(byte: number) {
+        this.byteboundary();
+        const i = this.u8.indexOf(byte, this.nextbyte());
+        if (i === -1) {
+            return false;
+        }
+        this.seek(i * 8);
+        return true;
+    }
+    byteboundary() {
+        if (this.atebits % 8 !== 0) {
+            throw new Error(`not byte boundary tell=${this.tell()}`);
+        }
+    }
+    nextbyte() {
+        return this.bypos + this.atebits / 8;
+    }
     seek(bipos: number) {
         bipos = Math.min(bipos, this.u8.length * 8);
         this.bypos = Math.floor(bipos / 8);
         this.atebits = bipos % 8;
-        if (this.atebits === 0) {
-            this.atebits = 8;
-            this.bypos = this.bypos - 1;
-        }
-        this.bits = this.u8[this.bypos];
+        this.bits = null;
     }
     tell() {
         return this.bypos * 8 + this.atebits;
     }
     eof() {
-        return this.u8.length <= this.bypos + 1;
+        return this.u8.length <= this.nextbyte();
     }
     get length() {
         return this.u8.length * 8;
@@ -1462,6 +1477,9 @@ export async function parsefile(ab: ArrayBuffer, callback: (iter: {
     let prevHybridTail: SubbandsType | null = null;
     let prevVVecQ: VVecQType | null = null;
     while (!br.eof()) {
+        if (!br.findbyte(0xFF)) {
+            break;
+        }
         const pos = br.tell();
         try {
             const frame = await readframe(br);
