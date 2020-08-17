@@ -1,47 +1,14 @@
 import React from 'react';
 import './App.css';
 import { Checkband } from './Checkband';
-import { parsefile, sampling_frequencies, Header, layer3_bitrate_kbps } from './libmp3';
+import { parsefile, sampling_frequencies } from './libmp3';
 import { Dropbox } from './Dropbox';
 import { Wavebar } from './Wavebar';
 import { MyParsed } from './types';
 import { Framebar } from './Framebar';
 import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
-
-function toBinary(value: number, cols: number) {
-  return value.toString(2).padStart(cols, "0");
-}
-
-function BytesEntry({ header, field, desc, bits, human }: { header: Header; field: keyof Header; desc?: string; bits: number, human?: (bits: number) => string; }) {
-  return <>
-    <tr>
-      <th style={{ textAlign: "right", paddingRight: "1em" }}>{desc ?? field}</th>
-      <td>{toBinary(header[field], bits)}{human ? ` (${human(header[field])})` : null}</td>
-    </tr>
-  </>;
-}
-
-function BytesHeader({ header }: { header: Header; }) {
-  return <>
-    <div style={{ background: "#cac", color: "black", margin: "2px" }}>header</div>
-    <table>
-      <BytesEntry header={header} field="syncword" bits={12} />
-      <BytesEntry header={header} field="id" desc="ID" bits={1} human={id => id ? "MPEG-1" : "MPEG-2"} />
-      <BytesEntry header={header} field="layer" bits={2} human={layer => ["???", "Layer-3", "Layer-2", "Layer-1"][layer]} />
-      <BytesEntry header={header} field="protection_bit" bits={1} human={bit => bit ? "None added" : "CRC-16 added"} />
-      <BytesEntry header={header} field="bitrate_index" bits={4} human={idx => idx === 0 ? "free format" : `${layer3_bitrate_kbps[idx - 1]} kbps`} />
-      <BytesEntry header={header} field="sampling_frequency" bits={2} human={freq => [...sampling_frequencies.map(String), "<reserved>"][freq]} />
-      <BytesEntry header={header} field="padding_bit" bits={1} human={bit => bit ? "padded" : "not-padded"} />
-      <BytesEntry header={header} field="private_bit" bits={1} human={_ => "<undefined>"} />
-      <BytesEntry header={header} field="mode" bits={2} human={mode => ["stereo", "joint-stereo", "dual-channel", "single-channel"][mode]} />
-      <BytesEntry header={header} field="mode_extension" bits={2} human={ext => `${(ext & 2) ? "MiddleSide" : "non-MiddleSide"}, ${(ext & 1) ? "IntensityStereo" : "non-IntensityStereo"}`} />
-      <BytesEntry header={header} field="copyright" bits={1} human={bit => bit ? "Copyright-Protected" : "not-copyrighted"} />
-      <BytesEntry header={header} field="original" bits={1} human={bit => bit ? "original" : "copied"} />
-      <BytesEntry header={header} field="emphasis" bits={2} human={emph => ["no-emphasis", "50/15us", "<reserved>", "CCITT_J.17"][emph]} />
-    </table>
-  </>;
-}
+import { Bytes } from './Bytes';
 
 function App() {
   const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
@@ -330,16 +297,9 @@ function App() {
           <p>TODO</p>
         </details>
         <details>
-          <summary>Frame in bytes:</summary>
+          <summary>Frame header in bytes:</summary>
           <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
-            {
-              selectedFrame === null || parsed.parsedFrames.length <= selectedFrame
-                ? <></>
-                : <>
-                  <div>File offset: {parsed.parsedFrames[selectedFrame].frame.offset}</div>
-                  <BytesHeader header={parsed.parsedFrames[selectedFrame].frame.header} />
-                </>
-            }
+            <Bytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} />
           </div>
         </details>
         <div>
