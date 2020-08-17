@@ -101,6 +101,9 @@ async function readheader(r: U8BitReader) {
     if (layer === 0) {
         throw new Error("!layer");
     }
+    if (layer !== 1) {
+        throw new Error("!non-layer3 not supported yet");
+    }
     const protection_bit = await r.readbits(1); // 0=redundancy_added
     const bitrate_index = await r.readbits(4);
     const sampling_frequency = await r.readbits(2); // 00=44.1k 01=48k 10=32k
