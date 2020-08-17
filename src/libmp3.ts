@@ -194,7 +194,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     const region_address2 = 20 - region_address1; // means no region2 (region_address2 points to end of bands)
 
                     return {
-                        block_split_flag: true, // window_switch(ing)?
+                        blocksplit_flag: true, // window_switch(ing)?
                         block_type, // 0=reserved(normal) 1=start_block 2=3_short_windows 3=end_block
                         switch_point, // mixed_block?
                         table_select,
@@ -212,7 +212,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
                     const region_address2 = await r.readbits(3);
 
                     return {
-                        block_split_flag: false, // window_switch?
+                        blocksplit_flag: false, // window_switch?
                         block_type: 0,
                         switch_point: null, // mixed_block?
                         table_select,
@@ -462,11 +462,11 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
 
     const sideinfo = frame.sideinfo.channel[ch].granule[gr];
 
-    // not "blocktype==2 and switch_point==true"? really block_split_flag?? its always true if blocktype==2!
-    // IIS and Lagerstrom uses block_split_flag.
-    // mp3decoder(haskell) completely ignores block_split_flag.
+    // not "blocktype==2 and switch_point==true"? really blocksplit_flag?? its always true if blocktype==2!
+    // IIS and Lagerstrom uses blocksplit_flag.
+    // mp3decoder(haskell) completely ignores blocksplit_flag.
     // but also region_start* are set (const) even when block_type==2??
-    const is_shortblock = (sideinfo.block_type === 2 && sideinfo.block_split_flag);
+    const is_shortblock = (sideinfo.block_type === 2 && sideinfo.blocksplit_flag);
     const sampfreq = sampling_frequencies[frame.header.sampling_frequency];
     const bigvalues = sideinfo.big_values * 2;
     // added by one? but ISO 11172-3 2.4.2.7 region_address1 says 0 is 0 "no first region"...?
@@ -488,7 +488,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
     if (bigvalues < region2start && rawregion2start !== 576) {
         throw new Error(`abnormal negative region2len: bigvalues=${bigvalues} < region2start=${region2start}`);
     }
-    if (sideinfo.block_split_flag && 0 < regionlens[2]) {
+    if (sideinfo.blocksplit_flag && 0 < regionlens[2]) {
         throw new Error(`block_split but region2: ${regionlens[2]}`);
     }
 
@@ -496,7 +496,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
     for (const region in regionlens) {
         const regionlen = regionlens[region];
         if (regionlen === 0) {
-            // block_split_flag=true then table_select[2] is undefined!
+            // blocksplit_flag=true then table_select[2] is undefined!
             continue;
         }
         const tabsel = sideinfo.table_select[region];
@@ -820,7 +820,7 @@ function requantizeOne(frame: Frame, sideinfo_gr_ch: SideinfoOfOneBlock, maindat
             };
         }
         case "short": // sideinfo.switch_point === 0
-            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
+            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then blocksplit_flag==1 and there is subblock_gain.
             return {
                 samples: requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 0),
                 scalefac_s: maindata_gr_ch.scalefac.scalefac_s,
@@ -829,7 +829,7 @@ function requantizeOne(frame: Frame, sideinfo_gr_ch: SideinfoOfOneBlock, maindat
             // till even point 36 = long_scalefactor_indices[8], requantize as long. no pretab for mixed (anyway they are 0 till [8]).
             const long_requantized = requantizeLongTill(sampfreq, scale_step, sideinfo_gr_ch.global_gain, maindata_gr_ch.scalefac.scalefac_l, is, 8);
             // from even point 36 = short_scalefactor_indices[3], requantize as short.
-            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then block_split_flag==1 and there is subblock_gain.
+            // sideinfo_gr_ch.subblock_gain!: if block_type==2 then blocksplit_flag==1 and there is subblock_gain.
             const short_requantized = requantizeShortFrom(sampfreq, scale_step, sideinfo_gr_ch.global_gain, sideinfo_gr_ch.subblock_gain!, maindata_gr_ch.scalefac.scalefac_s, is, 3);
             return {
                 samples: long_requantized.concat(short_requantized),
