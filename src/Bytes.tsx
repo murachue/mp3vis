@@ -1,6 +1,6 @@
 import React from 'react';
 import { ParsedFrame } from "./types";
-import { Header, layer3_bitrate_kbps, sampling_frequencies, Sideinfo } from "./libmp3";
+import { Header, layer3_bitrate_kbps, sampling_frequencies, Sideinfo, scalefac_compress_tab } from "./libmp3";
 
 const toBinary = (value: number, cols: number) => value.toString(2).padStart(cols, "0");
 
@@ -42,14 +42,53 @@ const BytesHeader = ({ header }: { header: Header; }) =>
         <BytesHeaderEntry header={header} field="emphasis" bits={2} human={emph => ["no-emphasis", "50/15us", "<reserved>", "CCITT_J.17"][emph]} />
     </BytesSection>;
 
-const BytesSideinfoBinEntry = ({ sideinfo, granule, channel, field, desc, bits, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: "part2_3_length" | "big_values" | "global_gain" | "scalefac_compress" | "preflag" | "scalefac_scale" | "count1table_select"; desc?: string; bits: number, human?: (bits: number) => string; }) =>
-    <BytesEntry desc={desc ?? field} value={`${toBinary(sideinfo.channel[channel].granule[granule][field], bits)}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field])})` : ""}`} />;
+type SideinfoNumberFields = "part2_3_length" | "big_values" | "global_gain" | "scalefac_compress" | "preflag" | "scalefac_scale" | "count1table_select" | "region_address1" | "region_address2" | "switch_point";
 
-const BytesSideinfoDecEntry = ({ sideinfo, granule, channel, field, desc, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: "part2_3_length" | "big_values" | "global_gain" | "scalefac_compress" | "preflag" | "scalefac_scale" | "count1table_select"; desc?: string; human?: (bits: number) => string; }) =>
-    <BytesEntry desc={desc ?? field} value={`${sideinfo.channel[channel].granule[granule][field]}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field])})` : ""}`} />;
+const BytesSideinfoBinEntry = ({ sideinfo, granule, channel, field, desc, bits, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: SideinfoNumberFields; desc?: string; bits: number, human?: (bits: number) => string; }) =>
+    <BytesEntry desc={desc ?? field} value={`${toBinary(sideinfo.channel[channel].granule[granule][field]!, bits)}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field]!)})` : ""}`} />;
 
-const BytesSideinfoHexEntry = ({ sideinfo, granule, channel, field, desc, cols, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: "part2_3_length" | "big_values" | "global_gain" | "scalefac_compress" | "preflag" | "scalefac_scale" | "count1table_select"; desc?: string; cols: number, human?: (bits: number) => string; }) =>
-    <BytesEntry desc={desc ?? field} value={`${toHex(sideinfo.channel[channel].granule[granule][field], cols)}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field])})` : ""}`} />;
+const BytesSideinfoDecEntry = ({ sideinfo, granule, channel, field, desc, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: SideinfoNumberFields; desc?: string; human?: (bits: number) => string; }) =>
+    <BytesEntry desc={desc ?? field} value={`${sideinfo.channel[channel].granule[granule][field]}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field]!)})` : ""}`} />;
+
+const BytesSideinfoHexEntry = ({ sideinfo, granule, channel, field, desc, cols, human }: { sideinfo: Sideinfo; granule: number; channel: number; field: SideinfoNumberFields; desc?: string; cols: number, human?: (bits: number) => string; }) =>
+    <BytesEntry desc={desc ?? field} value={`${toHex(sideinfo.channel[channel].granule[granule][field]!, cols)}${human ? ` (${human(sideinfo.channel[channel].granule[granule][field]!)})` : ""}`} />;
+
+const BytesSideinfoOne = ({ sideinfo, gr, ch }: { sideinfo: Sideinfo; gr: number; ch: number; }) => {
+    const sideinfo_gr_ch = sideinfo.channel[ch].granule[gr];
+    return <BytesSection color="#fdf" title={`sideinfo granule ${gr} channel ${ch}`}>
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="part2_3_length" human={_ => "bits"} />
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="big_values" human={_ => "* 2 values"} />
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="global_gain" human={_ => "2 ^ (this / 4), +210 biased"} />
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="scalefac_compress" human={sfc => scalefac_compress_tab[sfc].join(", ")} />
+        <BytesEntry desc="blocksplit_flag" value={`${Number(sideinfo_gr_ch.blocksplit_flag)} (${sideinfo_gr_ch.blocksplit_flag ? "non-normal-window" : "normal-window"})`} />
+        {sideinfo_gr_ch.blocksplit_flag === false
+            ? <>
+                <BytesEntry desc="block_type" value="(0) (normal-block)" />
+                <BytesEntry desc="switch_point" value="(0) (no-switch-point)" />
+                <BytesEntry desc="table_select[0]" value={`${sideinfo_gr_ch.table_select[0]}`} />
+                <BytesEntry desc="table_select[1]" value={`${sideinfo_gr_ch.table_select[1]}`} />
+                <BytesEntry desc="table_select[2]" value={`${sideinfo_gr_ch.table_select[2]}`} />
+                <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="region_address1" />
+                <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="region_address2" />
+            </>
+            : <>
+                <BytesEntry desc="block_type" value={`${sideinfo_gr_ch.block_type} (${["<reserved normal-block>", "start-block", "3 short-windows", "end-block"][sideinfo_gr_ch.block_type]})`} />
+                <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="switch_point" human={bit => bit ? "switch-long8-short3" : "no-switch-point"} />
+                <BytesEntry desc="table_select[0]" value={`${sideinfo_gr_ch.table_select[0]}`} />
+                <BytesEntry desc="table_select[1]" value={`${sideinfo_gr_ch.table_select[1]}`} />
+                <BytesEntry desc="table_select[2]" value="(N/A)" />
+                <BytesEntry desc="subblock_gain[0]" value={`${sideinfo_gr_ch.subblock_gain[0]}`} />
+                <BytesEntry desc="subblock_gain[1]" value={`${sideinfo_gr_ch.subblock_gain[1]}`} />
+                <BytesEntry desc="subblock_gain[2]" value={`${sideinfo_gr_ch.subblock_gain[2]}`} />
+                <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="region_address1" human={_ => "fixed"} />
+                <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="region_address2" human={_ => "fixed"} />
+            </>
+        }
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="preflag" human={bit => bit ? "scalefactor-added" : "no-scalefactor-added"} />
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="scalefac_scale" human={bit => bit ? "step 2" : "step sqrt 2"} />
+        <BytesSideinfoDecEntry sideinfo={sideinfo} granule={gr} channel={ch} field="count1table_select" human={bit => bit ? "table B" : "table A"} />
+    </BytesSection>;
+};
 
 const BytesSideinfo = ({ sideinfo }: { sideinfo: Sideinfo; }) =>
     <>
@@ -59,12 +98,17 @@ const BytesSideinfo = ({ sideinfo }: { sideinfo: Sideinfo; }) =>
         </BytesSection>
         {
             sideinfo.channel.map((ch, ch_i) => <BytesSection color="#fdf" title={`sideinfo scalefactor selection information: channel ${ch_i}`}>
-                {ch.scfsi.map((sfb, sfb_i) => <BytesEntry desc={`scfsi_band ${["0..5", "6..10", "11..15", "16..20"][sfb_i]}`} value={`${sfb} (${sfb ? "copy-from-granule-0" : "granule-1-encoded"})`} />)}
+                {ch.scfsi.map((sfb, sfb_i) => <BytesEntry desc={`scfsi_band ${["0..5", "6..10", "11..15", "16..20"][sfb_i]}`} value={`${sfb} (${sfb ? "copy-from-granule-0" : "transmitted"})`} />)}
             </BytesSection>)
         }
-        <BytesSection color="#fdf" title="sideinfo granule 0 channel 0">
-            <BytesSideinfoDecEntry sideinfo={sideinfo} granule={0} channel={0} field="part2_3_length" human={_ => "bits"} />
-        </BytesSection>
+        {
+            [0, 1].map(gr =>
+                <>
+                    <BytesSideinfoOne sideinfo={sideinfo} gr={gr} ch={0} />
+                    {1 < sideinfo.channel.length && <BytesSideinfoOne sideinfo={sideinfo} gr={gr} ch={1} />}
+                </>
+            )
+        }
     </>;
 
 export function Bytes({ parsedFrame }: { parsedFrame: ParsedFrame | null; }) {
