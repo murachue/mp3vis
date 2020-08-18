@@ -8,7 +8,7 @@ import { MyParsed } from './types';
 import { Framebar } from './Framebar';
 import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
-import { Bytes } from './Bytes';
+import { FrameBytes } from './FrameBytes';
 
 function App() {
   const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
@@ -299,7 +299,7 @@ function App() {
         <details>
           <summary>Frame header in bytes:</summary>
           <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
-            <Bytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} />
+            <FrameBytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} />
           </div>
         </details>
         <div>
