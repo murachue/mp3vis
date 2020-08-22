@@ -93,15 +93,15 @@ const SideinfoBytes = ({ sideinfo }: { sideinfo: Sideinfo; }) =>
             <BytesEntry desc="private_bits" value={toBinary(sideinfo.private_bits, sideinfo.channel.length === 1 ? 5 : 3)} />
         </BytesSection>
         {
-            sideinfo.channel.map((ch, ch_i) => <BytesSection color="#fdf" title={`sideinfo scalefactor selection information: channel ${ch_i}`}>
+            sideinfo.channel.map((ch, ch_i) => <BytesSection key={ch_i} color="#fdf" title={`sideinfo scalefactor selection information: channel ${ch_i}`}>
                 {ch.scfsi.map((sfb, sfb_i) => <BytesEntry key={sfb_i} desc={`scfsi_band ${["0..5", "6..10", "11..15", "16..20"][sfb_i]}`} value={`${sfb} (${sfb ? "copy-from-granule-0" : "transmitted"})`} />)}
             </BytesSection>)
         }
         {
             [0, 1].map(gr =>
                 <>
-                    <SideinfoBytesOne sideinfo={sideinfo} gr={gr} ch={0} />
-                    {1 < sideinfo.channel.length && <SideinfoBytesOne sideinfo={sideinfo} gr={gr} ch={1} />}
+                    <SideinfoBytesOne key={gr * 2} sideinfo={sideinfo} gr={gr} ch={0} />
+                    {1 < sideinfo.channel.length && <SideinfoBytesOne key={gr * 2 + 1} sideinfo={sideinfo} gr={gr} ch={1} />}
                 </>
             )
         }
