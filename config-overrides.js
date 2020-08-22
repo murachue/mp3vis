@@ -3,6 +3,11 @@
 const rewireReactHotLoader = require("react-app-rewire-hot-loader");
 
 module.exports = function override(config, env) {
+    // https://github.com/cdharris/react-app-rewire-hot-loader/issues/23
+    if (env == "development") {
+        config.resolve.alias["react-dom"] = "@hot-loader/react-dom";
+    }
+
     config = rewireReactHotLoader(config, env);
     return config;
 };
