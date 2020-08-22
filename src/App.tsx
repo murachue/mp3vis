@@ -1,4 +1,5 @@
 import React from 'react';
+import { hot } from 'react-hot-loader/root';
 import './App.css';
 import { Checkband } from './Checkband';
 import { parsefile, sampling_frequencies } from './libmp3';
@@ -315,4 +316,5 @@ function App() {
   );
 };
 
-export default App;
+// https://medium.com/@hokan_dev/react%E3%81%A7hmr%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95-aa3d851ce1b5
+export default process.env.NODE_ENV === "development" ? hot(App) : App;

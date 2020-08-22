@@ -15,15 +15,3 @@ ReactDOM.render(
 // unregister() to register() below. Note this comes with some pitfalls.
 // Learn more about service workers: https://bit.ly/CRA-PWA
 serviceWorker.unregister();
-
-// https://medium.com/@brianhan/hot-reloading-cra-without-eject-b54af352c642
-// https://qiita.com/Statham/items/695da38da327238e0c34
-if (module.hot) {
-  module.hot.accept('./App.tsx', () => {
-    const NextApp = require('./App').default;
-    ReactDOM.render(
-      <NextApp />,
-      document.getElementById('root')
-    );
-  });
-}
