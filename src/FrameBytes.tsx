@@ -18,7 +18,9 @@ const BytesSection = ({ color, title, children }: { color: string; title: string
     <>
         <div style={{ background: color, color: "black", margin: "2px" }}>{title}</div>
         <table>
-            {children}
+            <tbody>
+                {children}
+            </tbody>
         </table>
     </>;
 
@@ -92,7 +94,7 @@ const SideinfoBytes = ({ sideinfo }: { sideinfo: Sideinfo; }) =>
         </BytesSection>
         {
             sideinfo.channel.map((ch, ch_i) => <BytesSection color="#fdf" title={`sideinfo scalefactor selection information: channel ${ch_i}`}>
-                {ch.scfsi.map((sfb, sfb_i) => <BytesEntry desc={`scfsi_band ${["0..5", "6..10", "11..15", "16..20"][sfb_i]}`} value={`${sfb} (${sfb ? "copy-from-granule-0" : "transmitted"})`} />)}
+                {ch.scfsi.map((sfb, sfb_i) => <BytesEntry key={sfb_i} desc={`scfsi_band ${["0..5", "6..10", "11..15", "16..20"][sfb_i]}`} value={`${sfb} (${sfb ? "copy-from-granule-0" : "transmitted"})`} />)}
             </BytesSection>)
         }
         {
