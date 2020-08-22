@@ -100,8 +100,8 @@ const SideinfoBytes = ({ sideinfo }: { sideinfo: Sideinfo; }) =>
         {
             [0, 1].map(gr =>
                 <>
-                    <SideinfoBytesOne key={gr * 2} sideinfo={sideinfo} gr={gr} ch={0} />
-                    {1 < sideinfo.channel.length && <SideinfoBytesOne key={gr * 2 + 1} sideinfo={sideinfo} gr={gr} ch={1} />}
+                    <SideinfoBytesOne key={`${gr}_0`} sideinfo={sideinfo} gr={gr} ch={0} />
+                    {1 < sideinfo.channel.length && <SideinfoBytesOne key={`${gr}_1`} sideinfo={sideinfo} gr={gr} ch={1} />}
                 </>
             )
         }
