@@ -11,6 +11,60 @@ import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 import { FrameBytes } from './FrameBytes';
 
+const SFGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; granule: number; which: ScalefacFreqGraphArgs["which"]; }) => {
+  const data = (props.selectedFrame !== null && props.selectedFrame < props.parsed.parsedFrames.length) ? props.parsed.parsedFrames[props.selectedFrame] : null;
+  const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
+  return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
+    {
+      props.which === "stereoed"
+        ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={null} which={props.which} />
+        : <>
+          <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={0} which={props.which} />
+          {1 < props.parsed.sounds.length ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={1} which={props.which} /> : <></>}
+        </>}
+  </div>;
+};
+const SFGBox = (props: { parsed: MyParsed; selectedFrame: number | null; title: string; which: ScalefacFreqGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
+  // const [open, setOpen] = React.useState(false);
+  const detailsRef = React.useRef<HTMLDetailsElement>(null);
+  // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
+  return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
+    <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
+    {
+      props.open
+        ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+          <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
+          <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
+        </div>
+        : <></>
+    }
+  </details>;
+};
+
+const SbGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; granule: number; which: SubbandGraphArgs["which"]; }) => {
+  const data = (props.selectedFrame !== null && props.selectedFrame < props.parsed.parsedFrames.length) ? props.parsed.parsedFrames[props.selectedFrame] : null;
+  const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
+  return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
+    <SubbandGraph style={graphStyle} data={data} granule={props.granule} which={props.which} />
+  </div>;
+};
+const SbGBox = (props: { parsed: MyParsed; selectedFrame: number | null; title: string; which: SubbandGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
+  // const [open, setOpen] = React.useState(false);
+  const detailsRef = React.useRef<HTMLDetailsElement>(null);
+  // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
+  return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
+    <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
+    {
+      props.open
+        ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+          <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
+          <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
+        </div>
+        : <></>
+    }
+  </details>;
+};
+
 function App() {
   const [bandmask, setBandmask] = React.useState(Array(32).fill(true));
   const [parsed, setParsed] = React.useState<MyParsed>({ sounds: [], parsedFrames: [], });
@@ -203,60 +257,6 @@ function App() {
     playAnimation.current = requestAnimationFrame(refreshPlaying);
   }
 
-  const SFGGranuleBox = (props: { granule: number; which: ScalefacFreqGraphArgs["which"]; }) => {
-    const data = (selectedFrame !== null && selectedFrame < parsed.parsedFrames.length) ? parsed.parsedFrames[selectedFrame] : null;
-    const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
-    return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
-      {
-        props.which === "stereoed"
-          ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={null} which={props.which} />
-          : <>
-            <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={0} which={props.which} />
-            {1 < parsed.sounds.length ? <ScalefacFreqGraph style={graphStyle} data={data} granule={props.granule} channel={1} which={props.which} /> : <></>}
-          </>}
-    </div>;
-  };
-  const SFGBox = (props: { title: string; which: ScalefacFreqGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
-    // const [open, setOpen] = React.useState(false);
-    const detailsRef = React.useRef<HTMLDetailsElement>(null);
-    // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
-    return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
-      <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
-      {
-        props.open
-          ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
-            <SFGGranuleBox granule={0} which={props.which} />
-            <SFGGranuleBox granule={1} which={props.which} />
-          </div>
-          : <></>
-      }
-    </details>;
-  };
-
-  const SbGGranuleBox = (props: { granule: number; which: SubbandGraphArgs["which"]; }) => {
-    const data = (selectedFrame !== null && selectedFrame < parsed.parsedFrames.length) ? parsed.parsedFrames[selectedFrame] : null;
-    const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
-    return <div style={{ display: "flex", flexDirection: "column", margin: "10px 5px" }}>
-      <SubbandGraph style={graphStyle} data={data} granule={props.granule} which={props.which} />
-    </div>;
-  };
-  const SbGBox = (props: { title: string; which: SubbandGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
-    // const [open, setOpen] = React.useState(false);
-    const detailsRef = React.useRef<HTMLDetailsElement>(null);
-    // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
-    return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
-      <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
-      {
-        props.open
-          ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
-            <SbGGranuleBox granule={0} which={props.which} />
-            <SbGGranuleBox granule={1} which={props.which} />
-          </div>
-          : <></>
-      }
-    </details>;
-  };
-
   const [freqinvOpened, setFreqinvOpened] = React.useState(false);
   const [hysynthOpened, setHysynthOpened] = React.useState(false);
   const [antialiasOpened, setAntialiasOpened] = React.useState(false);
@@ -287,12 +287,12 @@ function App() {
           <p><Wavebar style={{ width: "100%", height: 100 }} barHeight={60} zoomWidth={300} data={parsed.sounds} zoomingPos={(autoFollow && playing.ctx) ? playing.pos / playing.period : null} hilight={hilight} /></p>
         </div>
         <p><button onClick={e => setAllOpen(true)}>Open all</button><button onClick={e => setAllOpen(false)}>Close all</button></p>
-        <SbGBox title="FreqInverted" which="freqinved" open={freqinvOpened} setOpen={setFreqinvOpened} />
-        <SbGBox title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
-        <SbGBox title="Antialiased" which="antialiased" open={antialiasOpened} setOpen={setAntialiasOpened} />
-        <SFGBox title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
-        <SFGBox title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
-        <SFGBox title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
+        <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="FreqInverted" which="freqinved" open={freqinvOpened} setOpen={setFreqinvOpened} />
+        <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
+        <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="Antialiased" which="antialiased" open={antialiasOpened} setOpen={setAntialiasOpened} />
+        <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
+        <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
+        <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
         <details>
           <summary>Maindata in bytes:</summary>
           <p>TODO</p>
