@@ -16,12 +16,10 @@ const BytesEntry = ({ desc, value }: { desc: string; bits: number; value: string
 
 const BytesSection = ({ color, title, children }: { color: string; title: string; children: React.ReactNode; }) =>
     <>
-        <div style={{ background: color, color: "black", margin: "2px" }}>{title}</div>
-        <table>
-            <tbody>
-                {children}
-            </tbody>
-        </table>
+        <tr>
+            <td colSpan={2} style={{ background: color, color: "black", margin: "2px" }}>{title}</td>
+        </tr>
+        {children}
     </>;
 
 const HeaderBytesEntry = ({ header, field, desc, bits, human }: { header: Header; field: keyof Header; desc?: string; bits: number, human?: (bits: number) => string; }) =>
@@ -111,13 +109,19 @@ export function FrameBytes({ parsedFrame }: { parsedFrame: ParsedFrame | null; }
     return parsedFrame === null
         ? <></>
         : <>
-            <div>File offset: {parsedFrame.frame.offset}</div>
-            <HeaderBytes header={parsedFrame.frame.header} />
-            {parsedFrame.frame.crc_check === null
-                ? null
-                : <BytesSection color="#dbd" title="error check">
-                    <BytesEntry desc="crc_check" bits={16} value={toHex(parsedFrame.frame.crc_check, 4)} />
-                </BytesSection>}
-            <SideinfoBytes sideinfo={parsedFrame.frame.sideinfo} />
+            <table>
+                <tbody>
+                    <tr>
+                        <td colSpan={2}>File offset: {parsedFrame.frame.offset}</td>
+                    </tr>
+                    <HeaderBytes header={parsedFrame.frame.header} />
+                    {parsedFrame.frame.crc_check === null
+                        ? null
+                        : <BytesSection color="#dbd" title="error check">
+                            <BytesEntry desc="crc_check" bits={16} value={toHex(parsedFrame.frame.crc_check, 4)} />
+                        </BytesSection>}
+                    <SideinfoBytes sideinfo={parsedFrame.frame.sideinfo} />
+                </tbody>
+            </table>
         </>;
 }
