@@ -76,6 +76,7 @@ function App() {
   const [playing, setPlaying] = React.useState({ ctx: null as AudioContext | null, start: 0, pos: 0, period: 0 });
   const playAnimation = React.useRef<number | null>(null);
   const [autoFollow, setAutoFollow] = React.useState(false);
+  const [frameBytesHiOffset, setFrameBytesHiOffset] = React.useState<number | null>(null);
 
   async function parse(ab: ArrayBuffer) {
     if (abortable) {
@@ -300,7 +301,7 @@ function App() {
         <details>
           <summary>Frame header in bytes:</summary>
           <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
-            <FrameBytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} />
+            <FrameBytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} hiOffset={frameBytesHiOffset} onClick={(off, bits) => { setFrameBytesHiOffset(off); }} />
           </div>
         </details>
         <div>
