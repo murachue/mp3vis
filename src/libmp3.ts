@@ -144,7 +144,7 @@ async function readlayer3sideinfo(r: U8BitReader, header: PromiseType<ReturnType
     const nchans = is_mono ? 1 : 2;
 
     const main_data_end = await r.readbits(9); // means this frame needs this more bytes from previous last
-    const private_bits = await r.readbits(is_mono ? 5 : 3);
+    const private_bits = await r.readbits(is_mono ? 5 : 3); // thanks to this private_bits (padding), end of side_infos are on byte boundary.
     // note: scfsi just for long windows.
     const scfsi = [];
     for (const ch of times(nchans)) { // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -288,6 +288,15 @@ async function readframe(r: U8BitReader) {
         throw new Error("free-format not supported yet");
     }
     const head_side_size = r.tell() / 8 - offset;
+
+    const head_side_bytes = (() => {
+        const end_of_header = r.tell();
+        r.seek(offset * 8);
+        const head_side_bytes = r.readbytes(head_side_size);
+        r.seek(end_of_header);
+        return head_side_bytes;
+    })();
+
     const framebytes = frame_bytes(header);
     const data = await r.readbytes(framebytes - head_side_size);
     const totalsize = r.tell() / 8 - offset;
@@ -298,6 +307,7 @@ async function readframe(r: U8BitReader) {
         crc_check,
         sideinfo,
         head_side_size,
+        head_side_bytes, // just for visualization
         data, // not main_data that is reassembled.
         totalsize,
     };
