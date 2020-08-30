@@ -413,47 +413,66 @@ export const scalefactor_band_indices_short = {
 // if this hits unexpected EOF, readbits throws.
 async function readhuffsymbol(r: U8BitReader, tab: readonly any[]) {
     let cur = tab;
+    let bits = "";
     for (; ;) {
         if (typeof cur[0] === "number") {
-            return cur;
+            return { value: cur, bits };
         }
-        cur = cur[await r.readbits(1)];
+        const bit = await r.readbits(1);
+        cur = cur[bit];
+        bits += bit; // string-concat
     }
 }
 
-async function readlinsign(r: U8BitReader, linbits: number, rawx: number) {
+async function readlinbits(r: U8BitReader, linbits: number, rawx: number) {
     // linbits only when value is maximum.
-    const x = rawx + ((linbits && rawx === 15) ? await r.readbits(linbits) : 0);
-    if (x === 0) {
-        // no sign bit transferred.
-        return 0;
+    if (linbits === 0 || rawx < 15) {
+        return { value: 0, linbits: "" };
     }
-    if (await r.readbits(1) !== 0) {
-        return -x;
+    const value = await r.readbits(linbits);
+    return { value, linbits: value.toString(2).padStart(linbits, "0") };
+}
+
+async function readsign(r: U8BitReader, x: number) {
+    const signbit = await r.readbits(1);
+    if (signbit) {
+        return { value: -x, sign: "1" };
     } else {
-        return x;
+        return { value: x, sign: "0" };
     }
+}
+
+async function readlinsign(r: U8BitReader, nlinbits: number, rawx: number) {
+    if (rawx === 0) {
+        // no sign bit transferred.
+        return { value: 0, linbits: "", sign: "" };
+    }
+
+    const linbits = await readlinbits(r, nlinbits, rawx);
+    const x = rawx + linbits.value;
+    const sign = await readsign(r, x);
+    return { value: sign.value, linbits: linbits.linbits, sign: sign.sign };
 }
 
 async function readhuffbig(r: U8BitReader, tab: typeof bigvalueHufftabs[number]) {
     // note: null table is also valid...
     if (!tab.table) {
-        return [0, 0];
+        return { value: [0, 0], huffbits: "", pairbits: [{ value: 0, linbits: "", sign: "" }, { value: 0, linbits: "", sign: "" }] };
     }
 
-    const [rawx, rawy] = await readhuffsymbol(r, tab.table);
+    const { value: [rawx, rawy], bits } = await readhuffsymbol(r, tab.table);
     const x = await readlinsign(r, tab.linbits, rawx);
     const y = await readlinsign(r, tab.linbits, rawy);
-    return [x, y];
+    return { value: [x.value, y.value], huffbits: bits, pairbits: [x, y] };
 }
 
 async function readhuffcount1(r: U8BitReader, tab: readonly any[]) {
-    const [rawv, raww, rawx, rawy] = await readhuffsymbol(r, tab);
+    const { value: [rawv, raww, rawx, rawy], bits } = await readhuffsymbol(r, tab);
     const v = await readlinsign(r, 0, rawv);
     const w = await readlinsign(r, 0, raww);
     const x = await readlinsign(r, 0, rawx);
     const y = await readlinsign(r, 0, rawy);
-    return [v, w, x, y];
+    return { value: [v.value, w.value, x.value, y.value], huffbits: bits, tuplebits: [v, w, x, y] };
 }
 
 // from Lagerstrom MP3 Thesis 2.4.3:
@@ -517,7 +536,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
         }
         // they are raw "is" count... here reads by 2.
         for (const pair_i of times(regionlen / 2)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-            is.push(...await readhuffbig(r, hufftab));
+            is.push(...(await readhuffbig(r, hufftab)).value);
         }
     }
 
@@ -531,7 +550,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
 
     const hufftab = count1Hufftabs[sideinfo.count1table_select];
     while (r.tell() - part3_start < part3_length) {
-        is.push(...await readhuffcount1(r, hufftab));
+        is.push(...(await readhuffcount1(r, hufftab)).value);
     }
 
     // it may overruns... ex. GOGO no coder.
@@ -563,6 +582,114 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
 // ISO 11172-3 2.4.2.7 scalefac_compress
 export const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3], [4, 2], [4, 3]];
 
+async function readscalefac(r: U8BitReader, sideinfo: SideinfoOfOneBlock, granule: number, scfsi: Sideinfo["channel"][number]["scfsi"]) {
+    const [slen1, slen2] = scalefac_compress_tab[sideinfo.scalefac_compress];
+    if (sideinfo.block_type === 2) {
+        // short-window
+        if (sideinfo.switch_point) {
+            // long-and-short
+            // even point (in samples) is 36. it is long[8] and short[3] * 3 in bands.
+            // long does not include 36, short does.
+            const scalefac_l = [];
+            for (const band of range(0, 7 + 1)) {
+                scalefac_l[band] = await r.readbits(slen1);
+            }
+            const scalefac_s = [];
+            // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s,
+            // but not from ISO 11172-3 2.4.2.7 scalefac_compress[gr] (it says 4..5, 6..11).
+            for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
+                for (const band of range(sfrbeg, sfrend + 1)) {
+                    const scalefac_s_w_band = [];
+                    for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+                        scalefac_s_w_band.push(await r.readbits(slen));
+                    }
+                    scalefac_s[band] = scalefac_s_w_band;
+                }
+            }
+            return {
+                type: "mixed",
+                scalefac_l,
+                scalefac_s,
+            } as const;
+        } else {
+            // short
+            const scalefac_s = [];
+            for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
+                for (const band of range(sfrbeg, sfrend + 1)) {
+                    // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
+                    const scalefac_s_w_band = [];
+                    for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+                        scalefac_s_w_band.push(await r.readbits(slen));
+                    }
+                    scalefac_s[band] = scalefac_s_w_band;
+                }
+            }
+            return {
+                type: "short",
+                scalefac_s,
+            } as const;
+        }
+    } else {
+        // long-window
+        // slen1 for 0..10, slen2 for 11..20
+        // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
+        // const scalefac_l: number[] = [];
+        const band_groups = [[0, 5, slen1, scfsi[0]], [6, 10, slen1, scfsi[1]], [11, 15, slen2, scfsi[2]], [16, 20, slen2, scfsi[3]]];
+        // note: we want flatMap but order of reading bits is strictly important. we must use reduce to ensure it.
+        const scalefac_l = [];
+        for (const [sfrbeg, sfrend, slen, scfsi] of band_groups) {
+            for (const band of range(sfrbeg, sfrend + 1)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+                if (granule === 0 || !scfsi) {
+                    const sf = await r.readbits(slen);
+                    scalefac_l.push(sf); // scalefac_l[band] = sf;
+                } else {
+                    // should copy from granule 0 if gr===1 && scfsi===1
+                    if (sideinfo.block_type === 2) {
+                        throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
+                    }
+                    // fill it later; use NaN to make more disaster when failed (not "broken-a-bit") to easy bug detection, but satisfy number type.
+                    scalefac_l.push(0 / 0); // scalefac_l[band] = 0/0;
+                }
+            }
+        }
+        return {
+            type: "long",
+            scalefac_l,
+        } as const;
+    }
+}
+
+// note: scalefac_gr0_ch is null if gr===0, non-null otherwise.
+function selectscalefac(scalefac: PromiseType<ReturnType<typeof readscalefac>>, sideinfo_ch: Sideinfo["channel"][number], scalefac_gr0_ch: PromiseType<ReturnType<typeof readscalefac>> | null) {
+    // no need to copy if gr===0 (this is source)
+    if (!scalefac_gr0_ch) {
+        return scalefac;
+    }
+    // other than long-window does not support scfsi
+    if (scalefac.type !== "long") {
+        return scalefac;
+    }
+
+    // copy scalefac if scfsi
+    const [slen1, slen2] = scalefac_compress_tab[sideinfo_ch.granule[1].scalefac_compress];
+    const scfsi = sideinfo_ch.scfsi;
+    const band_groups = [[0, 5, slen1, scfsi[0]], [6, 10, slen1, scfsi[1]], [11, 15, slen2, scfsi[2]], [16, 20, slen2, scfsi[3]]];
+    const scalefac_l = [...scalefac.scalefac_l];
+    for (const [sfrbeg, sfrend, _slen, scfsi] of band_groups) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+        if (!scfsi) {
+            continue;
+        }
+        if (scalefac_gr0_ch.type !== "long") {
+            throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
+        }
+        for (const band of range(sfrbeg, sfrend + 1)) {
+            scalefac_l[band] = scalefac_gr0_ch.scalefac_l![band];
+        }
+    }
+
+    return { ...scalefac, scalefac_l };
+}
+
 async function unpackframe(prevframes: Frame[], frame: Frame) {
     const main_data = get_main_data(prevframes, frame);
     if (!main_data) {
@@ -584,114 +711,12 @@ async function unpackframe(prevframes: Frame[], frame: Frame) {
         const channel = [];
         for (const ch of times(nchans)) {
             const sideinfo = frame.sideinfo.channel[ch].granule[gr];
-            const scalefac_compress_gr_ch = sideinfo.scalefac_compress;
 
             const part2_start = r.tell();
 
+            const scfsi_ch = frame.sideinfo.channel[ch].scfsi;
             // scale-factors are "part 2"
-            const scalefac_gr_ch = await (async () => {
-                const [slen1, slen2] = scalefac_compress_tab[scalefac_compress_gr_ch];
-                if (sideinfo.block_type === 2) {
-                    // short-window
-                    if (sideinfo.switch_point) {
-                        // long-and-short
-                        // even point (in samples) is 36. it is long[8] and short[3] * 3 in bands.
-                        // long does not include 36, short does.
-                        const scalefac_l = [];
-                        for (const band of range(0, 7 + 1)) {
-                            scalefac_l[band] = await r.readbits(slen1);
-                        }
-                        const scalefac_s = [];
-                        // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s,
-                        // but not from ISO 11172-3 2.4.2.7 scalefac_compress[gr] (it says 4..5, 6..11).
-                        for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
-                            for (const band of range(sfrbeg, sfrend + 1)) {
-                                const scalefac_s_w_band = [];
-                                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-                                    scalefac_s_w_band.push(await r.readbits(slen));
-                                }
-                                scalefac_s[band] = scalefac_s_w_band;
-                            }
-                        }
-                        return {
-                            type: "mixed",
-                            scalefac_l,
-                            scalefac_s,
-                        } as const;
-                    } else {
-                        // short
-                        const scalefac_s = [];
-                        for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
-                            for (const band of range(sfrbeg, sfrend + 1)) {
-                                // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
-                                const scalefac_s_w_band = [];
-                                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-                                    scalefac_s_w_band.push(await r.readbits(slen));
-                                }
-                                scalefac_s[band] = scalefac_s_w_band;
-                            }
-                        }
-                        return {
-                            type: "short",
-                            scalefac_s,
-                        } as const;
-                    }
-                } else {
-                    // long-window
-                    // slen1 for 0..10, slen2 for 11..20
-                    // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
-                    // const scalefac_l: number[] = [];
-                    const band_groups = [[0, 5, slen1], [6, 10, slen1], [11, 15, slen2], [16, 20, slen2]];
-                    // note: we want flatMap but order of reading bits is strictly important. we must use reduce to ensure it.
-                    const scalefac_l = await band_groups.reduce(async (prev, [sfrbeg, sfrend, slen], group) => {
-                        const scalefacs = await prev;
-                        for (const band of range(sfrbeg, sfrend + 1)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-                            if (gr === 0 || !frame.sideinfo.channel[ch].scfsi[group]) {
-                                const sf = await r.readbits(slen);
-                                scalefacs.push(sf); // scalefac_l[band] = sf;
-                            } else {
-                                // copy from granule 0 if gr===1 && scfsi===1
-                                if (sideinfo.block_type === 2) {
-                                    throw new Error("scfsi=1 is not allowed if block_type===2 (short window)");
-                                }
-                                // const scalefac_gr0 = granule[0].channel[ch].scalefac;
-                                // // const scalefac_l_gr0 = (scalefac_gr0 as { scalefac_l: number[]; }).scalefac_l;
-                                // if (scalefac_gr0.type !== "long") {
-                                //     throw new Error(`BadImpl: window mutated between granule: ${scalefac_gr0}`);
-                                // }
-                                // const scalefac_l_gr0 = scalefac_gr0.scalefac_l;
-                                // scalefac_l[band] = scalefac_l_gr0[band];
-
-                                // fill it later; use NaN to make more disaster when failed (not "broken-a-bit") to easy bug detection, but satisfy number type.
-                                scalefacs.push(0 / 0); // scalefac_l[band] = 0/0;
-                            }
-                        }
-                        return scalefacs;
-                    }, Promise.resolve([] as number[]));
-
-                    // copy scalefac if scfsi. don't do this in above loop to allow tsc type derive for "granule" succeed.
-                    if (gr === 1) {
-                        for (const group in band_groups) {
-                            if (!frame.sideinfo.channel[ch].scfsi[group]) {
-                                continue;
-                            }
-                            const scalefac_gr0_ch = granule[0].channel[ch].scalefac;
-                            if (scalefac_gr0_ch.type !== "long") {
-                                throw new Error(`scfsi but gr0 not long: ${scalefac_gr0_ch.type}`);
-                            }
-                            const [sfrbegin, sfrend, _slen] = band_groups[group];  // eslint-disable-line @typescript-eslint/no-unused-vars
-                            for (const band of range(sfrbegin, sfrend + 1)) {
-                                scalefac_l[band] = scalefac_gr0_ch.scalefac_l[band];
-                            }
-                        }
-                    }
-
-                    return {
-                        type: "long",
-                        scalefac_l,
-                    } as const;
-                }
-            })();
+            const scalefac_gr_ch = selectscalefac(await readscalefac(r, sideinfo, gr, scfsi_ch), frame.sideinfo.channel[ch], gr === 0 ? null : granule[0].channel[ch].scalefac);
 
             const part2_length = r.tell() - part2_start;
 
