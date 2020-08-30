@@ -584,52 +584,8 @@ export const scalefac_compress_tab = [[0, 0], [0, 1], [0, 2], [0, 3], [3, 0], [1
 
 async function readscalefac(r: U8BitReader, sideinfo: SideinfoOfOneBlock, granule: number, scfsi: Sideinfo["channel"][number]["scfsi"]) {
     const [slen1, slen2] = scalefac_compress_tab[sideinfo.scalefac_compress];
-    if (sideinfo.block_type === 2) {
-        // short-window
-        if (sideinfo.switch_point) {
-            // long-and-short
-            // even point (in samples) is 36. it is long[8] and short[3] * 3 in bands.
-            // long does not include 36, short does.
-            const scalefac_l = [];
-            for (const band of range(0, 7 + 1)) {
-                scalefac_l[band] = await r.readbits(slen1);
-            }
-            const scalefac_s = [];
-            // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s,
-            // but not from ISO 11172-3 2.4.2.7 scalefac_compress[gr] (it says 4..5, 6..11).
-            for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
-                for (const band of range(sfrbeg, sfrend + 1)) {
-                    const scalefac_s_w_band = [];
-                    for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-                        scalefac_s_w_band.push(await r.readbits(slen));
-                    }
-                    scalefac_s[band] = scalefac_s_w_band;
-                }
-            }
-            return {
-                type: "mixed",
-                scalefac_l,
-                scalefac_s,
-            } as const;
-        } else {
-            // short
-            const scalefac_s = [];
-            for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
-                for (const band of range(sfrbeg, sfrend + 1)) {
-                    // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
-                    const scalefac_s_w_band = [];
-                    for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-                        scalefac_s_w_band.push(await r.readbits(slen));
-                    }
-                    scalefac_s[band] = scalefac_s_w_band;
-                }
-            }
-            return {
-                type: "short",
-                scalefac_s,
-            } as const;
-        }
-    } else {
+
+    if (sideinfo.block_type !== 2) {
         // long-window
         // slen1 for 0..10, slen2 for 11..20
         // ISO 11172-3 2.4.2.7 scfsi_band: 0..5, 6..10, 11..15, 16..20
@@ -655,6 +611,51 @@ async function readscalefac(r: U8BitReader, sideinfo: SideinfoOfOneBlock, granul
         return {
             type: "long",
             scalefac_l,
+        } as const;
+    }
+
+    // short-window
+    if (sideinfo.switch_point) {
+        // long-and-short
+        // even point (in samples) is 36. it is long[8] and short[3] * 3 in bands.
+        // long does not include 36, short does.
+        const scalefac_l = [];
+        for (const band of range(0, 7 + 1)) {
+            scalefac_l[band] = await r.readbits(slen1);
+        }
+        const scalefac_s = [];
+        // 3..5, 6..11 from Lagerstrom MP3 Thesis and ISO 11172-3 2.4.2.7 switch_point[gr] switch_point_s,
+        // but not from ISO 11172-3 2.4.2.7 scalefac_compress[gr] (it says 4..5, 6..11).
+        for (const [sfrbeg, sfrend, slen] of [[3, 5, slen1], [6, 11, slen2]]) {
+            for (const band of range(sfrbeg, sfrend + 1)) {
+                const scalefac_s_w_band = [];
+                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+                    scalefac_s_w_band.push(await r.readbits(slen));
+                }
+                scalefac_s[band] = scalefac_s_w_band;
+            }
+        }
+        return {
+            type: "mixed",
+            scalefac_l,
+            scalefac_s,
+        } as const;
+    } else {
+        // short
+        const scalefac_s = [];
+        for (const [sfrbeg, sfrend, slen] of [[0, 5, slen1], [6, 11, slen2]]) {
+            for (const band of range(sfrbeg, sfrend + 1)) {
+                // !!! spec is wrong. short-window also have 3 windows. Lagerstrom MP3 Thesis did not touch this!
+                const scalefac_s_w_band = [];
+                for (const window of times(3)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+                    scalefac_s_w_band.push(await r.readbits(slen));
+                }
+                scalefac_s[band] = scalefac_s_w_band;
+            }
+        }
+        return {
+            type: "short",
+            scalefac_s,
         } as const;
     }
 }
