@@ -521,7 +521,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
         throw new Error(`block_split but region2: ${regionlens[2]}`);
     }
 
-    const is = []; // what is "is"? abbreviated? many I-s? what I?
+    const bigs = [];
     for (const region in regionlens) {
         const regionlen = regionlens[region];
         if (regionlen === 0) {
@@ -536,7 +536,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
         }
         // they are raw "is" count... here reads by 2.
         for (const pair_i of times(regionlen / 2)) {  // eslint-disable-line @typescript-eslint/no-unused-vars
-            is.push(...(await readhuffbig(r, hufftab)).value);
+            bigs.push(await readhuffbig(r, hufftab));
         }
     }
 
@@ -544,22 +544,25 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
     if (part3_length < bigpartread) {
         throw new Error(`big_value exceeds part3_length: ${part3_length} < ${bigpartread}`);
     }
-    if (bigpartread < part3_length && 576 <= is.length) {
+    if (bigpartread < part3_length && 576 / 2 <= bigs.length) {
         throw new Error("is already filled but garbage bits");
     }
 
     const hufftab = count1Hufftabs[sideinfo.count1table_select];
+    const ones = [];
     while (r.tell() - part3_start < part3_length) {
-        is.push(...(await readhuffcount1(r, hufftab)).value);
+        ones.push(await readhuffcount1(r, hufftab));
     }
 
     // it may overruns... ex. GOGO no coder.
     const part3read = r.tell() - part3_start;
+    const ones_extra = [];
     if (part3_length < part3read) {
         // throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
         // we must treat this case; as we did not read last quads.
-        is.splice(is.length - 4, 4);
+        ones_extra.push(ones.pop());
     }
+    const is = bigs.flatMap(e => e.value).concat(ones.flatMap(e => e.value)); // what is "is"? abbreviated? many I-s? what I?
     if (576 < is.length) {
         // throw new Error(`is exceeds 576: ${is.length}`);
         // some encoder emit data like this...
@@ -576,6 +579,10 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
     return {
         is,
         zero_part_begin,
+
+        bigs,
+        ones,
+        ones_extra,
     };
 }
 
