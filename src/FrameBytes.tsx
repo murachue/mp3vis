@@ -1,26 +1,11 @@
 import React from 'react';
+import { BytesEntry, BytesSection, BytesBox } from "./Bytes";
 import { ParsedFrame } from "./types";
 import { Header, layer3_bitrate_kbps, sampling_frequencies, Sideinfo, scalefac_compress_tab } from "./libmp3";
 
 const toBinary = (value: number, cols: number) => value.toString(2).padStart(cols, "0");
 
 const toHex = (value: number, cols: number) => `0x${value.toString(16).padStart(cols, "0")}`;
-
-const BytesEntry = ({ desc, offset, bits, value, hiOffset, onClick }: { desc: string; offset: number; bits: number; value: string; hiOffset: number | null; onClick?: (offset: number, bits: number) => void; }) =>
-    <>
-        <tr onClick={e => onClick?.(offset, bits)} style={{ background: offset === hiOffset ? "#ddf" : undefined }}>
-            <th style={{ textAlign: "right", paddingRight: "1em" }}>{desc}</th>
-            <td>{value}</td>
-        </tr>
-    </>;
-
-const BytesSection = ({ color, title, children }: { color: string; title: string; children: React.ReactNode; }) =>
-    <>
-        <tr>
-            <td colSpan={4} style={{ background: color, color: "black", margin: "2px" }}>{title}</td>
-        </tr>
-        {children}
-    </>;
 
 const HeaderBytesEntry = ({ header, field, desc, offset, bits, human, hiOffset, onClick }: { header: Header; field: keyof Header; desc?: string; offset: number; bits: number, human?: (bits: number) => string; hiOffset: number | null; onClick?: (offset: number, bits: number) => void; }) =>
     <BytesEntry desc={desc ?? field} offset={offset} bits={bits} value={`${toBinary(header[field], bits)}${human ? ` (${human(header[field])})` : ""}`} hiOffset={hiOffset} onClick={onClick} />;
@@ -108,20 +93,14 @@ const SideinfoBytes = ({ sideinfo, offset, hiOffset, onClick }: { sideinfo: Side
 export function FrameBytes({ parsedFrame, hiOffset, onClick }: { parsedFrame: ParsedFrame | null; hiOffset: number | null; onClick?: (offset: number, bits: number) => void; }) {
     return parsedFrame === null
         ? <></>
-        : <>
-            <table>
-                <tbody>
-                    <tr>
-                        <td colSpan={2}>File offset: {parsedFrame.frame.offset}</td>
-                    </tr>
-                    <HeaderBytes header={parsedFrame.frame.header} hiOffset={hiOffset} onClick={onClick} />
-                    {parsedFrame.frame.crc_check === null
-                        ? null
-                        : <BytesSection color="#dbd" title="error check">
-                            <BytesEntry desc="crc_check" offset={32} bits={16} value={toHex(parsedFrame.frame.crc_check, 4)} hiOffset={hiOffset} onClick={onClick} />
-                        </BytesSection>}
-                    <SideinfoBytes sideinfo={parsedFrame.frame.sideinfo} offset={32 + (parsedFrame.frame.crc_check === null ? 0 : 16)} hiOffset={hiOffset} onClick={onClick} />
-                </tbody>
-            </table>
-        </>;
+        : <BytesBox>
+            <BytesSection color="none" title={`File offset: ${parsedFrame.frame.offset}`} />
+            <HeaderBytes header={parsedFrame.frame.header} hiOffset={hiOffset} onClick={onClick} />
+            {parsedFrame.frame.crc_check === null
+                ? null
+                : <BytesSection color="#dbd" title="error check">
+                    <BytesEntry desc="crc_check" offset={32} bits={16} value={toHex(parsedFrame.frame.crc_check, 4)} hiOffset={hiOffset} onClick={onClick} />
+                </BytesSection>}
+            <SideinfoBytes sideinfo={parsedFrame.frame.sideinfo} offset={32 + (parsedFrame.frame.crc_check === null ? 0 : 16)} hiOffset={hiOffset} onClick={onClick} />
+        </BytesBox>;
 }
