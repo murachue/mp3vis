@@ -11,6 +11,17 @@ import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 import { FrameBytes } from './FrameBytes';
 
+// want to open-state embedded, but controlled-prop in React style forces this.
+const Acordion = (props: { open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; summary: React.ReactNode; children?: React.ReactNode; }) => {
+  // const [open, setOpen] = React.useState(false);
+  const detailsRef = React.useRef<HTMLDetailsElement>(null);
+  // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
+  return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
+    <summary style={{ cursor: "pointer" }}>{props.summary}</summary>
+    {props.open && props.children}
+  </details>;
+};
+
 const SFGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; granule: number; which: ScalefacFreqGraphArgs["which"]; }) => {
   const data = (props.selectedFrame !== null && props.selectedFrame < props.parsed.parsedFrames.length) ? props.parsed.parsedFrames[props.selectedFrame] : null;
   const graphStyle = { width: "576px", height: "150px", margin: "2px 0" } as const;
@@ -25,20 +36,12 @@ const SFGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; 
   </div>;
 };
 const SFGBox = (props: { parsed: MyParsed; selectedFrame: number | null; title: string; which: ScalefacFreqGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
-  // const [open, setOpen] = React.useState(false);
-  const detailsRef = React.useRef<HTMLDetailsElement>(null);
-  // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
-  return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
-    <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
-    {
-      props.open
-        ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
-          <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
-          <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
-        </div>
-        : <></>
-    }
-  </details>;
+  return <Acordion summary={`${props.title}:`} open={props.open} setOpen={props.setOpen}>
+    <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+      <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
+      <SFGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
+    </div>
+  </Acordion>;
 };
 
 const SbGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; granule: number; which: SubbandGraphArgs["which"]; }) => {
@@ -49,20 +52,12 @@ const SbGGranuleBox = (props: { parsed: MyParsed; selectedFrame: number | null; 
   </div>;
 };
 const SbGBox = (props: { parsed: MyParsed; selectedFrame: number | null; title: string; which: SubbandGraphArgs["which"]; open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; }) => {
-  // const [open, setOpen] = React.useState(false);
-  const detailsRef = React.useRef<HTMLDetailsElement>(null);
-  // return <details open={open} onToggle={e => setOpen(detailsRef.current!.open)} ref={detailsRef}>
-  return <details open={props.open} onToggle={e => props.setOpen?.(detailsRef.current!.open)} ref={detailsRef}>
-    <summary style={{ cursor: "pointer" }}>{props.title}:</summary>
-    {
-      props.open
-        ? <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
-          <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
-          <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
-        </div>
-        : <></>
-    }
-  </details>;
+  return <Acordion summary={`${props.title}:`} open={props.open} setOpen={props.setOpen}>
+    <div style={{ display: "flex", flexWrap: "wrap", margin: "-10px -5px" }}>
+      <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={0} which={props.which} />
+      <SbGGranuleBox parsed={props.parsed} selectedFrame={props.selectedFrame} granule={1} which={props.which} />
+    </div>
+  </Acordion>;
 };
 
 function App() {
@@ -264,8 +259,19 @@ function App() {
   const [stereoOpened, setStereoOpened] = React.useState(false);
   const [reorderOpened, setReorderOpened] = React.useState(false);
   const [requantizeOpened, setRequantizeOpened] = React.useState(false);
+  const [maindataOpened, setMaindataOpened] = React.useState(false);
+  const [frameOpened, setFrameOpened] = React.useState(false);
   const setAllOpen = (open: boolean) => {
-    [setFreqinvOpened, setHysynthOpened, setAntialiasOpened, setStereoOpened, setReorderOpened, setRequantizeOpened].forEach(fn => fn(open));
+    [
+      setFreqinvOpened,
+      setHysynthOpened,
+      setAntialiasOpened,
+      setStereoOpened,
+      setReorderOpened,
+      setRequantizeOpened,
+      setMaindataOpened,
+      setFrameOpened,
+    ].forEach(fn => fn(open));
   };
 
   const hilight: [number, number] | undefined = selectedFrame === null ? undefined : [selectedFrame * 1152, selectedFrame * 1152 + 1152];
@@ -294,16 +300,14 @@ function App() {
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
-        <details>
-          <summary>Maindata in bytes:</summary>
+        <Acordion summary="Maindata in bytes:" open={maindataOpened} setOpen={setMaindataOpened}>
           <p>TODO</p>
-        </details>
-        <details>
-          <summary>Frame header in bytes:</summary>
+        </Acordion>
+        <Acordion summary="Frame header in bytes:" open={frameOpened} setOpen={setFrameOpened}>
           <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
             <FrameBytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} hiOffset={frameBytesHiOffset} onClick={(off, bits) => { setFrameBytesHiOffset(off); }} />
           </div>
-        </details>
+        </Acordion>
         <div>
           <p>Frames:</p>
           <p><Framebar style={{ width: "100%", height: 60 }} barHeight={30} zoomWidth={300} data={parsed.parsedFrames} selectedFrame={selectedFrame} onSelectedFrame={fr => setSelectedFrame(fr /* || 0 */)} /></p>
