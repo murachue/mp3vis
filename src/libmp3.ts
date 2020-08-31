@@ -723,8 +723,9 @@ async function unpackframe(prevframes: Frame[], frame: Frame) {
             const part2_start = r.tell();
 
             const scfsi_ch = frame.sideinfo.channel[ch].scfsi;
+            const raw_scalefac_gr_ch = await readscalefac(r, sideinfo, gr, scfsi_ch);
             // scale-factors are "part 2"
-            const scalefac_gr_ch = selectscalefac(await readscalefac(r, sideinfo, gr, scfsi_ch), frame.sideinfo.channel[ch], gr === 0 ? null : granule[0].channel[ch].scalefac);
+            const scalefac_gr_ch = selectscalefac(raw_scalefac_gr_ch, frame.sideinfo.channel[ch], gr === 0 ? null : granule[0].channel[ch].scalefac);
 
             const part2_length = r.tell() - part2_start;
 
@@ -738,6 +739,7 @@ async function unpackframe(prevframes: Frame[], frame: Frame) {
             channel.push({
                 part2_length,
                 part3_length,
+                raw_scalefac: raw_scalefac_gr_ch,
                 scalefac: scalefac_gr_ch,
                 is: is_gr_ch,
             });

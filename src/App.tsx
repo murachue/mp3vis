@@ -10,6 +10,7 @@ import { Framebar } from './Framebar';
 import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 import { FrameBytes } from './FrameBytes';
+import { MaindataBytes } from './MaindataBytes';
 
 // want to open-state embedded, but controlled-prop in React style forces this.
 const Acordion = (props: { open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; summary: React.ReactNode; children?: React.ReactNode; }) => {
@@ -301,7 +302,13 @@ function App() {
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
         <Acordion summary="Maindata in bytes:" open={maindataOpened} setOpen={setMaindataOpened}>
-          <p>TODO</p>
+          <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
+            <MaindataBytes
+              sideinfo={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].frame.sideinfo}
+              maindata={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].maindata || null}
+              hiOffset={frameBytesHiOffset}
+              onClick={(off, bits) => { setFrameBytesHiOffset(off); }} />
+          </div>
         </Acordion>
         <Acordion summary="Frame header in bytes:" open={frameOpened} setOpen={setFrameOpened}>
           <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
