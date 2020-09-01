@@ -88,7 +88,7 @@ const maindataHuffman = ({ maindata, gr, ch, offset, hiOffset, onClick }: { main
         }
     }
 
-    return elements;
+    return 0 < elements.length ? elements : "(nothing)";
 };
 
 export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sideinfo: Sideinfo | null, maindata: Maindata | null; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
