@@ -76,6 +76,17 @@ const maindataHuffman = ({ maindata, gr, ch, offset, hiOffset, onClick }: { main
         }
     }
 
+    const oneoff = maindata_gr_ch.is.bigs.length * 2 + maindata_gr_ch.is.ones.length * 4;
+    for (const [onetuple, i] of maindata_gr_ch.is.ones_extra.map((onetuple, i) => [onetuple, i] as const)) {
+        elements.push(<BytesEntry key={`oneextra_pair_${i}`} desc={`(one.tuple[${oneoff + i * 4}..${oneoff + i * 4 + 3}])`} offset={offset} bits={onetuple.huffbits.length} value={`${onetuple.huffbits} (${onetuple.value.map(Math.abs)})`} hiOffset={hiOffset} onClick={onClick} />);
+        offset += onetuple.huffbits.length;
+        for (const [one, t_i] of onetuple.tuplebits.map((one, t_i) => [one, t_i] as const)) {
+            if (one.sign) {
+                elements.push(<BytesEntry key={`oneextra_sign_${i}_${t_i}`} desc={`(one.sign[${oneoff + i * 4 + t_i}])`} offset={offset} bits={one.sign.length} value={`${one.sign} (-> ${one.value})`} hiOffset={hiOffset} onClick={onClick} />);
+                offset += one.sign.length;
+            }
+        }
+    }
 
     return elements;
 };
@@ -88,8 +99,8 @@ export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sidei
     const sections = [];
     let offset = 0;
 
-    for (const ch of times(sideinfo.channel.length)) {
-        for (const gr of times(2)) {
+    for (const gr of times(2)) {
+        for (const ch of times(sideinfo.channel.length)) {
             const scalefac = maindataScalefac({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
             sections.push(<BytesSection key={`scalefac_${ch}_${gr}`} color="#eee" title={`scalefactors channel ${ch} granule ${gr}`}>{scalefac.elements}</BytesSection>);
 
