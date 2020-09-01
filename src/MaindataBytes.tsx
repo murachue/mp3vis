@@ -45,28 +45,39 @@ const maindataScalefac = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClic
     }
 };
 
-const maindataHuffman = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick }: { sideinfo: Sideinfo; maindata: Maindata, gr: number, ch: number; offset: number; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
+const maindataHuffman = ({ maindata, gr, ch, offset, hiOffset, onClick }: { maindata: Maindata, gr: number, ch: number; offset: number; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
     const maindata_gr_ch = maindata.granule[gr].channel[ch];
     const elements = [];
-    const bigs = maindata_gr_ch.is.bigs;
-    for (const [big, i] of bigs.map((big, i) => [big, i] as const)) {
-        elements.push(<BytesEntry key={`pair_${i}`} desc={`big.pair[${i * 2},${i * 2 + 1}]`} offset={offset} bits={big.huffbits.length} value={`${big.huffbits} (${big.value.map(e => Math.min(15, Math.abs(e)))})`} hiOffset={hiOffset} onClick={onClick} />);
+
+    for (const [big, i] of maindata_gr_ch.is.bigs.map((big, i) => [big, i] as const)) {
+        elements.push(<BytesEntry key={`big_pair_${i}`} desc={`big.pair[${i * 2},${i * 2 + 1}]`} offset={offset} bits={big.huffbits.length} value={`${big.huffbits} (${big.value.map(e => Math.min(15, Math.abs(e)))})`} hiOffset={hiOffset} onClick={onClick} />);
         offset += big.huffbits.length;
         for (const [one, p_i] of big.pairbits.map((one, p_i) => [one, p_i] as const)) {
             if (one.linbits) {
-                elements.push(<BytesEntry key={`linbits_${i}_${p_i}`} desc={`big.linbits[${i * 2 + p_i}]`} offset={offset} bits={one.linbits.length} value={`+${Math.abs(one.value) - 15}`} hiOffset={hiOffset} onClick={onClick} />);
+                elements.push(<BytesEntry key={`big_linbits_${i}_${p_i}`} desc={`big.linbits[${i * 2 + p_i}]`} offset={offset} bits={one.linbits.length} value={`+${Math.abs(one.value) - 15}`} hiOffset={hiOffset} onClick={onClick} />);
                 offset += one.linbits.length;
             }
             if (one.sign) {
-                elements.push(<BytesEntry key={`sign_${i}_${p_i}`} desc={`big.sign[${i * 2 + p_i}]`} offset={offset} bits={one.sign.length} value={`${one.sign} (-> ${one.value})`} hiOffset={hiOffset} onClick={onClick} />);
+                elements.push(<BytesEntry key={`big_sign_${i}_${p_i}`} desc={`big.sign[${i * 2 + p_i}]`} offset={offset} bits={one.sign.length} value={`${one.sign} (-> ${one.value})`} hiOffset={hiOffset} onClick={onClick} />);
                 offset += one.sign.length;
             }
         }
     }
-    return {
-        elements,
-        offset,
-    };
+
+    const bigoff = maindata_gr_ch.is.bigs.length * 2;
+    for (const [onetuple, i] of maindata_gr_ch.is.ones.map((onetuple, i) => [onetuple, i] as const)) {
+        elements.push(<BytesEntry key={`one_pair_${i}`} desc={`one.tuple[${bigoff + i * 4}..${bigoff + i * 4 + 3}]`} offset={offset} bits={onetuple.huffbits.length} value={`${onetuple.huffbits} (${onetuple.value.map(Math.abs)})`} hiOffset={hiOffset} onClick={onClick} />);
+        offset += onetuple.huffbits.length;
+        for (const [one, t_i] of onetuple.tuplebits.map((one, t_i) => [one, t_i] as const)) {
+            if (one.sign) {
+                elements.push(<BytesEntry key={`one_sign_${i}_${t_i}`} desc={`one.sign[${bigoff + i * 4 + t_i}]`} offset={offset} bits={one.sign.length} value={`${one.sign} (-> ${one.value})`} hiOffset={hiOffset} onClick={onClick} />);
+                offset += one.sign.length;
+            }
+        }
+    }
+
+
+    return elements;
 };
 
 export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sideinfo: Sideinfo | null, maindata: Maindata | null; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
@@ -79,17 +90,13 @@ export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sidei
 
     for (const ch of times(sideinfo.channel.length)) {
         for (const gr of times(2)) {
-            const result = maindataScalefac({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
-            sections.push(<BytesSection key={`${ch}_${gr}`} color="#eee" title={`scalefactors channel ${ch} granule ${gr}`}>{result.elements}</BytesSection>);
-            offset += result.offset;
-        }
-    }
+            const scalefac = maindataScalefac({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
+            sections.push(<BytesSection key={`scalefac_${ch}_${gr}`} color="#eee" title={`scalefactors channel ${ch} granule ${gr}`}>{scalefac.elements}</BytesSection>);
 
-    for (const ch of times(sideinfo.channel.length)) {
-        for (const gr of times(2)) {
-            const result = maindataHuffman({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
-            sections.push(<BytesSection key={`${ch}_${gr}`} color="#eee" title={`huffmans channel ${ch} granule ${gr}`}>{result.elements}</BytesSection>);
-            offset += result.offset;
+            const elements = maindataHuffman({ maindata, gr, ch, offset: offset + scalefac.offset, hiOffset, onClick });
+            sections.push(<BytesSection key={`huffman_${ch}_${gr}`} color="#eee" title={`huffmans channel ${ch} granule ${gr}`}>{elements}</BytesSection>);
+
+            offset += sideinfo.channel[ch].granule[gr].part2_3_length;
         }
     }
 
