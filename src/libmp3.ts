@@ -482,8 +482,12 @@ async function readhuffcount1(r: U8BitReader, tab: readonly any[]) {
 async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, gr: number, ch: number) {
     if (part3_length <= 0) {
         return {
-            is: Array(576).fill(0),
+            is: Array<number>(576).fill(0),
             zero_part_begin: 0,
+
+            bigs: [],
+            ones: [],
+            ones_extra: [],
         };
     }
 
@@ -560,7 +564,7 @@ async function readhuffman(r: U8BitReader, frame: Frame, part3_length: number, g
     if (part3_length < part3read) {
         // throw new Error(`const1 exceeds part3_length: ${part3_length} < ${part3read}`);
         // we must treat this case; as we did not read last quads.
-        ones_extra.push(ones.pop());
+        ones_extra.push(ones.pop()!);
     }
     const is = bigs.flatMap(e => e.value).concat(ones.flatMap(e => e.value)); // what is "is"? abbreviated? many I-s? what I?
     if (576 < is.length) {

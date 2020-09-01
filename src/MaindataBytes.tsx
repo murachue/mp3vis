@@ -15,7 +15,7 @@ const maindataScalefac = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClic
             const offsets = lens.reduce((prev, cur) => [...prev, prev[prev.length - 1] + cur], [0]);
             return {
                 offset: offsets[offsets.length - 1],
-                element: scalefac.scalefac_l.map((sf, i) => <BytesEntry key={i} desc={`long[${i}]`} offset={offset + offsets[i]} bits={lens[i]} value={isNaN(raw_scalefac.scalefac_l![i]) ? `(${sf}) (copied)` : `${sf} (${lens[i]} bits)`} hiOffset={hiOffset} onClick={onClick} />),
+                elements: scalefac.scalefac_l.map((sf, i) => <BytesEntry key={i} desc={`long[${i}]`} offset={offset + offsets[i]} bits={lens[i]} value={isNaN(raw_scalefac.scalefac_l![i]) ? `(${sf}) (copied)` : `${sf} (${lens[i]} bits)`} hiOffset={hiOffset} onClick={onClick} />),
             };
         }
         case "short": {
@@ -23,7 +23,7 @@ const maindataScalefac = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClic
             const offsets = lens.reduce((prev, cur) => [...prev, prev[prev.length - 1] + cur * 3], [0]);
             return {
                 offset: offsets[offsets.length - 1],
-                element: scalefac.scalefac_s.flatMap((sfs, i) =>
+                elements: scalefac.scalefac_s.flatMap((sfs, i) =>
                     sfs.map((sf, w_i) => <BytesEntry key={`${i}_${w_i}`} desc={`short[${i}][${w_i}]`} offset={offset + offsets[i] + lens[i] * w_i} bits={lens[i]} value={`${sf} (${lens[i]} bits)`} hiOffset={hiOffset} onClick={onClick} />)
                 ),
             };
@@ -35,7 +35,7 @@ const maindataScalefac = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClic
             const offsets_short = lens_short.reduce((prev, cur) => [...prev, prev[prev.length - 1] + cur * 3], [offsets_long[offsets_long.length - 1]]);
             return {
                 offset: offsets_short[offsets_short.length - 1],
-                element:
+                elements:
                     scalefac.scalefac_l.map((sf, i) => <BytesEntry key={`long_${i}`} desc={`long[${i}]`} offset={offset + offsets_long[i]} bits={lens_long[i]} value={`${sf} (${lens_long[i]} bits)`} hiOffset={hiOffset} onClick={onClick} />)
                         .concat(scalefac.scalefac_s.flatMap((sfs, i) =>
                             sfs.map((sf, w_i) => <BytesEntry key={`short_${i}_${w_i}`} desc={`short[${i}][${w_i}]`} offset={offset + offsets_short[i] + lens_short[i] * w_i} bits={lens_short[i]} value={`${sf} (${lens_short[i]} bits)`} hiOffset={hiOffset} onClick={onClick} />)
@@ -43,6 +43,30 @@ const maindataScalefac = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClic
             };
         }
     }
+};
+
+const maindataHuffman = ({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick }: { sideinfo: Sideinfo; maindata: Maindata, gr: number, ch: number; offset: number; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
+    const maindata_gr_ch = maindata.granule[gr].channel[ch];
+    const elements = [];
+    const bigs = maindata_gr_ch.is.bigs;
+    for (const [big, i] of bigs.map((big, i) => [big, i] as const)) {
+        elements.push(<BytesEntry key={`pair_${i}`} desc={`big.pair[${i * 2},${i * 2 + 1}]`} offset={offset} bits={big.huffbits.length} value={`${big.huffbits} (${big.value.map(e => Math.min(15, Math.abs(e)))})`} hiOffset={hiOffset} onClick={onClick} />);
+        offset += big.huffbits.length;
+        for (const [one, p_i] of big.pairbits.map((one, p_i) => [one, p_i] as const)) {
+            if (one.linbits) {
+                elements.push(<BytesEntry key={`linbits_${i}_${p_i}`} desc={`big.linbits[${i * 2 + p_i}]`} offset={offset} bits={one.linbits.length} value={`+${Math.abs(one.value) - 15}`} hiOffset={hiOffset} onClick={onClick} />);
+                offset += one.linbits.length;
+            }
+            if (one.sign) {
+                elements.push(<BytesEntry key={`sign_${i}_${p_i}`} desc={`big.sign[${i * 2 + p_i}]`} offset={offset} bits={one.sign.length} value={`${one.sign} (-> ${one.value})`} hiOffset={hiOffset} onClick={onClick} />);
+                offset += one.sign.length;
+            }
+        }
+    }
+    return {
+        elements,
+        offset,
+    };
 };
 
 export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sideinfo: Sideinfo | null, maindata: Maindata | null; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
@@ -56,15 +80,20 @@ export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sidei
     for (const ch of times(sideinfo.channel.length)) {
         for (const gr of times(2)) {
             const result = maindataScalefac({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
-            sections.push(<BytesSection key={`${ch}_${gr}`} color="#eee" title={`scalefactors channel ${ch} granule ${gr}`}>{result.element}</BytesSection>);
+            sections.push(<BytesSection key={`${ch}_${gr}`} color="#eee" title={`scalefactors channel ${ch} granule ${gr}`}>{result.elements}</BytesSection>);
             offset += result.offset;
         }
     }
 
-    // TODO huffman
+    for (const ch of times(sideinfo.channel.length)) {
+        for (const gr of times(2)) {
+            const result = maindataHuffman({ sideinfo, maindata, gr, ch, offset, hiOffset, onClick });
+            sections.push(<BytesSection key={`${ch}_${gr}`} color="#eee" title={`huffmans channel ${ch} granule ${gr}`}>{result.elements}</BytesSection>);
+            offset += result.offset;
+        }
+    }
 
     return <BytesBox>
         {sections}
-        <p>TODO: huffman</p>
     </BytesBox>;
 };
