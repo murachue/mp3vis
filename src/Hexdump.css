@@ -1,3 +1,16 @@
 .header {
     background: rgba(0, 0, 0, 0.1);
 }
+
+.select-begin {
+    background: linear-gradient(90deg, transparent, rgb(64,220,255))
+}
+.select {
+    background: rgb(64,220,255)
+}
+.select-end {
+    background: linear-gradient(90deg, rgb(64,220,255), transparent)
+}
+.select-part {
+    background: linear-gradient(90deg, transparent, rgb(64,220,255), transparent)
+}

@@ -2,7 +2,7 @@ import React from 'react';
 
 export const BytesEntry = ({ desc, offset, bits, value, hiOffset, onClick }: { desc: string; offset: number; bits: number; value: string; hiOffset: number | null; onClick?: (offset: number, bits: number) => void; }) =>
     <>
-        <tr onClick={e => onClick?.(offset, bits)} style={{ background: offset === hiOffset ? "#ddf" : undefined }}>
+        <tr onClick={e => onClick?.(offset, bits)} style={{ background: offset === hiOffset && 0 < bits ? "#ddf" : undefined }}>
             <th style={{ textAlign: "right", paddingRight: "1em" }}>{desc}</th>
             <td>{value}</td>
         </tr>

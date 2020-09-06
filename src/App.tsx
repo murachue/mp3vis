@@ -11,7 +11,7 @@ import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 import { FrameBytes } from './FrameBytes';
 import { MaindataBytes } from './MaindataBytes';
-import { Hexdump } from './Hexdump';
+import { Hexdump, Hilight } from './Hexdump';
 
 // want to open-state embedded, but controlled-prop in React style forces this.
 const Acordion = (props: { open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; summary: React.ReactNode; children?: React.ReactNode; }) => {
@@ -73,8 +73,8 @@ function App() {
   const [playing, setPlaying] = React.useState({ ctx: null as AudioContext | null, start: 0, pos: 0, period: 0 });
   const playAnimation = React.useRef<number | null>(null);
   const [autoFollow, setAutoFollow] = React.useState(false);
-  const [frameBytesHilight, setFrameBytesHilight] = React.useState<{ offset: number; bits: number; } | null>(null);
-  const [maindataBytesHilight, setMaindataBytesHilight] = React.useState<{ offset: number; bits: number; } | null>(null);
+  const [frameBytesHilight, setFrameBytesHilight] = React.useState<Hilight | null>(null);
+  const [maindataBytesHilight, setMaindataBytesHilight] = React.useState<Hilight | null>(null);
 
   async function parse(ab: ArrayBuffer) {
     if (abortable) {
@@ -311,7 +311,7 @@ function App() {
                 sideinfo={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].frame.sideinfo}
                 maindata={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].maindata || null}
                 hiOffset={maindataBytesHilight ? maindataBytesHilight.offset : null}
-                onClick={(offset, bits) => { setMaindataBytesHilight({ offset, bits }); }} />
+                onClick={(offset, bits) => { bits && setMaindataBytesHilight({ offset, bits }); }} />
             </div>
             <div style={{ width: "50%", height: "15em", border: "2px inset", boxSizing: "border-box", overflow: "auto" }}>
               <Hexdump
@@ -326,7 +326,7 @@ function App() {
               <FrameBytes
                 parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]}
                 hiOffset={frameBytesHilight ? frameBytesHilight.offset : null}
-                onClick={(offset, bits) => { setFrameBytesHilight({ offset, bits }); }} />
+                onClick={(offset, bits) => { bits && setFrameBytesHilight({ offset, bits }); }} />
             </div>
             <div style={{ width: "50%", height: "15em", border: "2px inset", boxSizing: "border-box", overflow: "auto" }}>
               <Hexdump
