@@ -45,7 +45,7 @@ function marginSelectClassName(hilight: Hilight | null, offset: number) {
 export const Hexdump = ({ data, hilight }: { data: Uint8Array, hilight: Hilight | null; }) => {
     return <div style={{ fontFamily: "monospace" }}>
         <div style={{ display: "flex" }}>
-            <div className="header" style={{ flexShrink: 0, minWidth: "2em" }} />
+            <div className="header" style={{ flexShrink: 0, minWidth: "2em" }}>{"\u00A0".repeat(4)}</div>
             <div className="header" style={{ flexShrink: 0, width: "0.5em" }} />
             {times(16, i =>
                 <div key={`col_${i}`} className="header" style={{ flexShrink: 0, width: "1em" }}>+{hex(i)}</div>
