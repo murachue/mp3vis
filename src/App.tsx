@@ -13,6 +13,10 @@ import { FrameBytes } from './FrameBytes';
 import { MaindataBytes } from './MaindataBytes';
 import { Hexdump, Hilight } from './Hexdump';
 
+interface ChromeFile {
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
 // want to open-state embedded, but controlled-prop in React style forces this.
 const Acordion = (props: { open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; summary: React.ReactNode; children?: React.ReactNode; }) => {
   // const [open, setOpen] = React.useState(false);
@@ -278,11 +282,12 @@ function App() {
   };
 
   const hilight: [number, number] | undefined = selectedFrame === null ? undefined : [selectedFrame * 1152, selectedFrame * 1152 + 1152];
+  const fileChooserRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <Dropbox onFileDrop={parse}>
       <div style={{ width: "100%", background: "#ccc", color: "#000", padding: "0px 2em", boxSizing: "border-box" }}>
-        <p>Drop a MP3 file into here.</p>
+        <p>Drop a MP3 file into here, or <button onClick={_ => fileChooserRef.current?.click()}>specify a MP3 file</button><input type="file" style={{ display: "none" }} onChange={e => { (e.currentTarget.files?.[0] as File & ChromeFile | undefined)?.arrayBuffer().then(parse); e.currentTarget.value = ""; }} ref={fileChooserRef} /></p>
         <p>{<button style={{ display: abortable ? "inline" : "none" }} onClick={() => { aborted.current = true; }}>abort</button>}{parsedFrames === null ? "info shown here" : parsedMaindatas === null ? `${parsedFrames}...` : `${parsedFrames} / ${parsedMaindatas}`}</p>
         <p>{(() => {
           const firstFrame = parsed.parsedFrames[0];
