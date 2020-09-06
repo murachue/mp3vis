@@ -11,6 +11,7 @@ import { ScalefacFreqGraph, ScalefacFreqGraphArgs } from './ScalefacFreqGraph';
 import { SubbandGraph, SubbandGraphArgs } from './SubbandGraph';
 import { FrameBytes } from './FrameBytes';
 import { MaindataBytes } from './MaindataBytes';
+import { Hexdump } from './Hexdump';
 
 // want to open-state embedded, but controlled-prop in React style forces this.
 const Acordion = (props: { open?: boolean; /* onToggle?: (e: React.SyntheticEvent<HTMLElement, Event>) => void; */setOpen?: (open: boolean) => void; summary: React.ReactNode; children?: React.ReactNode; }) => {
@@ -72,7 +73,8 @@ function App() {
   const [playing, setPlaying] = React.useState({ ctx: null as AudioContext | null, start: 0, pos: 0, period: 0 });
   const playAnimation = React.useRef<number | null>(null);
   const [autoFollow, setAutoFollow] = React.useState(false);
-  const [frameBytesHiOffset, setFrameBytesHiOffset] = React.useState<number | null>(null);
+  const [frameBytesHilight, setFrameBytesHilight] = React.useState<{ offset: number; bits: number; } | null>(null);
+  const [maindataBytesHilight, setMaindataBytesHilight] = React.useState<{ offset: number; bits: number; } | null>(null);
 
   async function parse(ab: ArrayBuffer) {
     if (abortable) {
@@ -296,23 +298,41 @@ function App() {
         </div>
         <p><button onClick={e => setAllOpen(true)}>Open all</button><button onClick={e => setAllOpen(false)}>Close all</button></p>
         <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="FreqInverted" which="freqinved" open={freqinvOpened} setOpen={setFreqinvOpened} />
+        {/* TODO: prevsound for hybridsynth */}
         <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="HybridSynthed" which="hysynthed_timedom" open={hysynthOpened} setOpen={setHysynthOpened} />
         <SbGBox parsed={parsed} selectedFrame={selectedFrame} title="Antialiased" which="antialiased" open={antialiasOpened} setOpen={setAntialiasOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Stereoed" which="stereoed" open={stereoOpened} setOpen={setStereoOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Reordered (only short-windows)" which="reordered" open={reorderOpened} setOpen={setReorderOpened} />
         <SFGBox parsed={parsed} selectedFrame={selectedFrame} title="Requantized" which="requantized" open={requantizeOpened} setOpen={setRequantizeOpened} />
         <Acordion summary="Maindata in bytes:" open={maindataOpened} setOpen={setMaindataOpened}>
-          <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
-            <MaindataBytes
-              sideinfo={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].frame.sideinfo}
-              maindata={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].maindata || null}
-              hiOffset={frameBytesHiOffset}
-              onClick={(off, bits) => { setFrameBytesHiOffset(off); }} />
+          <div style={{ width: "100%", display: "flex", flexDirection: "row" }}>
+            <div style={{ width: "50%", height: "15em", overflow: "auto", border: "2px inset", boxSizing: "border-box" }}>
+              <MaindataBytes
+                sideinfo={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].frame.sideinfo}
+                maindata={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame].maindata || null}
+                hiOffset={maindataBytesHilight ? maindataBytesHilight.offset : null}
+                onClick={(offset, bits) => { setMaindataBytesHilight({ offset, bits }); }} />
+            </div>
+            <div style={{ width: "50%", height: "15em", border: "2px inset", boxSizing: "border-box", overflow: "auto" }}>
+              <Hexdump
+                data={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame || parsed.parsedFrames[selectedFrame].maindata === null ? new Uint8Array(0) : parsed.parsedFrames[selectedFrame].maindata!.main_data}
+                hilight={maindataBytesHilight} />
+            </div>
           </div>
         </Acordion>
         <Acordion summary="Frame header in bytes:" open={frameOpened} setOpen={setFrameOpened}>
-          <div style={{ height: "15em", overflow: "auto", border: "2px inset" }}>
-            <FrameBytes parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]} hiOffset={frameBytesHiOffset} onClick={(off, bits) => { setFrameBytesHiOffset(off); }} />
+          <div style={{ width: "100%", display: "flex", flexDirection: "row" }}>
+            <div style={{ width: "50%", height: "15em", overflow: "auto", border: "2px inset", boxSizing: "border-box" }}>
+              <FrameBytes
+                parsedFrame={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? null : parsed.parsedFrames[selectedFrame]}
+                hiOffset={frameBytesHilight ? frameBytesHilight.offset : null}
+                onClick={(offset, bits) => { setFrameBytesHilight({ offset, bits }); }} />
+            </div>
+            <div style={{ width: "50%", height: "15em", border: "2px inset", boxSizing: "border-box", overflow: "auto" }}>
+              <Hexdump
+                data={selectedFrame === null || parsed.parsedFrames.length <= selectedFrame ? new Uint8Array(0) : parsed.parsedFrames[selectedFrame].frame.head_side_bytes}
+                hilight={frameBytesHilight} />
+            </div>
           </div>
         </Acordion>
         <div>

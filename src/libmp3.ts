@@ -289,10 +289,10 @@ async function readframe(r: U8BitReader) {
     }
     const head_side_size = r.tell() / 8 - offset;
 
-    const head_side_bytes = (() => {
+    const head_side_bytes = await (async () => {
         const end_of_header = r.tell();
         r.seek(offset * 8);
-        const head_side_bytes = r.readbytes(head_side_size);
+        const head_side_bytes = await r.readbytes(head_side_size);
         r.seek(end_of_header);
         return head_side_bytes;
     })();
