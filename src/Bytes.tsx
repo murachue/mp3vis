@@ -8,6 +8,13 @@ export const BytesEntry = ({ desc, offset, bits, value, hiOffset, onClick }: { d
         </tr>
     </>;
 
+export const BytesNote = ({ title }: { title: string; }) =>
+    <>
+        <tr>
+            <td colSpan={2} style={{ margin: "2px" }}>{title}</td>
+        </tr>
+    </>;
+
 export const BytesSection = ({ color, title, children }: { color: string; title: string; children?: React.ReactNode; }) =>
     <>
         <tr>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BytesEntry, BytesSection, BytesBox } from "./Bytes";
+import { BytesEntry, BytesSection, BytesBox, BytesNote } from "./Bytes";
 import { Maindata, scalefac_compress_tab, Sideinfo } from './libmp3';
 import { times, range } from 'lodash-es';
 
@@ -88,7 +88,7 @@ const maindataHuffman = ({ maindata, gr, ch, offset, hiOffset, onClick }: { main
         }
     }
 
-    return 0 < elements.length ? elements : "(nothing)";
+    return 0 < elements.length ? elements : <BytesNote title="(nothing)" />;
 };
 
 export const MaindataBytes = ({ sideinfo, maindata, hiOffset, onClick }: { sideinfo: Sideinfo | null, maindata: Maindata | null; hiOffset: number | null; onClick: (offset: number, bits: number) => void; }) => {
