@@ -1,3 +1,13 @@
+# mp3vis
+
+This project tries to visualize MP3 format and intermediate data in a web browser.
+
+You can try this on: https://murachue.github.io/mp3vis/
+
+React's README template follows.
+
+---
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
