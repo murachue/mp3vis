@@ -2,7 +2,9 @@
 
 This project tries to visualize MP3 format and intermediate data in a web browser.
 
-You can try this on: https://murachue.github.io/mp3vis/
+You can try this on: https://murachue.github.io/mp3vis/build/
+
+Currently only MPEG-1 Layer 3 (without "free-format" bitrate) is supported.
 
 React's README template follows.
 
