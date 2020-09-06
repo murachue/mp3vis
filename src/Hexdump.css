@@ -2,6 +2,19 @@
     background: rgba(0, 0, 0, 0.1);
 }
 
+.address {
+    min-width: 2em;
+    text-align: right;
+}
+
+.spacer {
+    width: 0.5em;
+}
+
+.hex {
+    width: 1em;
+}
+
 .select-begin {
     background: linear-gradient(90deg, transparent, rgb(64,220,255))
 }

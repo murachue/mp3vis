@@ -11,11 +11,11 @@ const hex = (value: number, col: number = 0) => value.toString(16).toUpperCase()
 
 function hexSelectClassName(hilight: Hilight | null, offset: number) {
     if (!hilight) {
-        return undefined;
+        return "";
     }
 
     if (hilight.offset + hilight.bits <= offset || offset + 8 <= hilight.offset) {
-        return undefined;
+        return "";
     }
 
     if (hilight.offset <= offset && offset + 8 <= hilight.offset + hilight.bits) {
@@ -34,36 +34,36 @@ function hexSelectClassName(hilight: Hilight | null, offset: number) {
 
 function marginSelectClassName(hilight: Hilight | null, offset: number) {
     if (!hilight) {
-        return undefined;
+        return "";
     }
 
     return hilight.offset < offset && offset < hilight.offset + hilight.bits
         ? "select"
-        : undefined;
+        : "";
 }
 
 export const Hexdump = ({ data, hilight }: { data: Uint8Array, hilight: Hilight | null; }) => {
     return <div style={{ fontFamily: "monospace" }}>
         <div style={{ display: "flex" }}>
-            <div className="header" style={{ flexShrink: 0, minWidth: "2em" }}>{"\u00A0".repeat(4)}</div>
-            <div className="header" style={{ flexShrink: 0, width: "0.5em" }} />
+            <div className="header address" style={{ flexShrink: 0, }}>{"\u00A0".repeat(4)}</div>
+            <div className="header spacer" style={{ flexShrink: 0, }} />
             {times(16, i =>
-                <div key={`col_${i}`} className="header" style={{ flexShrink: 0, width: "1em" }}>+{hex(i)}</div>
-            ).flatMap((e, i) => [i ? <div key={`space_${i}`} className="header" style={{ flexShrink: 0, width: "0.5em" }} /> : null, e])}
+                <div key={`col_${i}`} className="header hex" style={{ flexShrink: 0 }}>+{hex(i)}</div>
+            ).flatMap((e, i) => [i ? <div key={`space_${i}`} className="header spacer" style={{ flexShrink: 0 }} /> : null, e])}
         </div>
         {times(Math.ceil(data.length / 16), row => <div key={row} style={{ display: "flex" }}>
-            <div className="header" style={{ flexShrink: 0, minWidth: "2em", textAlign: "right" }}>{hex(row * 16, 4)}</div>
-            <div style={{ flexShrink: 0, width: "0.5em" }} />
+            <div className="header address" style={{ flexShrink: 0 }}>{hex(row * 16, 4)}</div>
+            <div className="spacer" style={{ flexShrink: 0 }} />
             {times(16, i =>
                 <div
                     key={`col_${i}`}
-                    className={hexSelectClassName(hilight, 8 * (row * 16 + i))}
-                    style={{ flexShrink: 0, width: "1em" }}
+                    className={"hex " + hexSelectClassName(hilight, 8 * (row * 16 + i))}
+                    style={{ flexShrink: 0 }}
                 >
                     {(row * 16 + i) < data.length ? hex(data[row * 16 + i], 2) : null}
                 </div>
             ).flatMap((e, i) => [i
-                ? <div key={`space_${i}`} className={marginSelectClassName(hilight, (row * 16 + i) * 8)} style={{ flexShrink: 0, width: "0.5em" }} />
+                ? <div key={`space_${i}`} className={"spacer " + marginSelectClassName(hilight, (row * 16 + i) * 8)} style={{ flexShrink: 0 }} />
                 : null, e
             ])}
         </div>)}
