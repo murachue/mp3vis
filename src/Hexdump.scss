@@ -1,0 +1,31 @@
+.header {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.address {
+    min-width: 2em;
+    text-align: right;
+}
+
+.spacer {
+    width: 0.5em;
+}
+
+.hex {
+    width: 1em;
+}
+
+$select-color: rgb(64,220,255);
+
+.select-begin {
+    background: linear-gradient(90deg, transparent, $select-color)
+}
+.select {
+    background: $select-color
+}
+.select-end {
+    background: linear-gradient(90deg, $select-color, transparent)
+}
+.select-part {
+    background: linear-gradient(90deg, transparent, $select-color, transparent)
+}

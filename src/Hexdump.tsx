@@ -1,6 +1,6 @@
 import React from 'react';
 import { times } from 'lodash-es';
-import './Hexdump.css';
+import './Hexdump.scss';
 
 export type Hilight = {
     offset: number;
