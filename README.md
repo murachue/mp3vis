@@ -6,6 +6,17 @@ You can try this on: https://murachue.github.io/mp3vis/build/
 
 Currently only MPEG-1 Layer 3 (without "free-format" bitrate) is supported.
 
+references:
+
+- gyuque's [JPEG Tilt](http://ushiroad.com/jt/)
+  - inspired to visualize familiar media format
+- Krister Lagerström's [MP3 Decoder Master's Thesis](https://sites.google.com/a/kmlager.com/www/projects)
+  - easier-to-understand-spec in both PDF (with graphics) and C implementation
+- Björn Edström's [Let’s build an MP3-decoder!](http://blog.bjrn.se/2008/10/lets-build-mp3-decoder.html)
+  - another MP3 decoder implementation, in Haskell (!) with some FFI-called C
+- ISO/IEC 11172-3
+  - some part of...
+
 React's README template follows.
 
 ---
